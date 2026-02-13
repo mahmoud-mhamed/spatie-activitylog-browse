@@ -144,10 +144,10 @@
         translateAttr(key) {
             let t = this.attrTranslations?.[key];
             if (t) {
-                return this._esc(t) + ' <span class=\"text-gray-400 font-normal\">(' + this._esc(key) + ')</span>';
+                return `${this._esc(t)} <span class='text-gray-400 font-normal'>(${this._esc(key)})</span>`;
             }
             let h = key.replace(/[_\-.]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, l => l.toUpperCase());
-            let extra = h !== key ? ' <span class=\"text-gray-400 font-normal font-mono text-xs\">' + this._esc(key) + '</span>' : '';
+            let extra = h !== key ? ` <span class='text-gray-400 font-normal font-mono text-xs'>${this._esc(key)}</span>` : '';
             return this._esc(h) + extra;
         }
     }">
@@ -491,6 +491,7 @@
             'barColor' => 'bg-rose-500',
             'fullWidth' => true,
             'mono' => true,
+            'translate' => true,
         ])
     </div>
 @endsection

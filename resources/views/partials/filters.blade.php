@@ -110,7 +110,7 @@
                 </svg>
             </button>
             <div x-show="open" x-transition.opacity.duration.150ms
-                 class="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-lg">
+                 class="absolute z-50 mt-1 w-164 bg-white border border-gray-200 rounded-md shadow-lg">
                 <div class="p-2">
                     <input x-ref="attrSearch" type="text" x-model="search"
                            placeholder="{{ __('activitylog-browse::messages.search') }}..."
@@ -286,127 +286,14 @@
     </div>
 </form>
 
-<div id="model_info_card" style="display:none" class="bg-white rounded-lg shadow p-4 mb-6"
-     x-data="{
-        loading: false,
-        info: null,
-        search: '',
-        selectedAttrs: @js(array_filter(explode(',', request('changed_attribute', '')))),
-        formatSize(bytes) {
-            if (!bytes) return '-';
-            const units = ['B', 'KB', 'MB', 'GB'];
-            let i = 0, size = bytes;
-            for (; size >= 1024 && i < units.length - 1; i++) size /= 1024;
-            return size.toFixed(1) + ' ' + units[i];
-        },
-        isAttrSelected(key) {
-            return this.selectedAttrs.includes(key);
-        },
-        get filteredAttrs() {
-            if (!this.info) return [];
-            if (!this.search) return this.info.attributes;
-            let s = this.search.toLowerCase();
-            return this.info.attributes.filter(a => a.key.toLowerCase().includes(s) || a.label.toLowerCase().includes(s));
-        }
-     }">
-    <div class="flex items-center justify-between gap-3 mb-3">
-        <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span x-show="info" x-text="info?.stats?.model_basename"></span>
-            — {{ __('activitylog-browse::messages.model_info') }}
-        </h3>
-        <template x-if="info && info.attributes.length > 8">
-            <input type="text" x-model="search"
-                   placeholder="{{ __('activitylog-browse::messages.search') }}..."
-                   class="rounded-md border-gray-300 shadow-sm text-sm px-3 py-1.5 border focus:border-blue-500 focus:ring-blue-500 w-48">
-        </template>
-    </div>
-
-    {{-- Loading --}}
-    <div x-show="loading" class="flex justify-center py-6">
-        <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-        </svg>
-    </div>
-
-    <template x-if="!loading && info">
-        <div>
-            {{-- Stats mini cards --}}
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-                <div class="bg-gray-50 rounded-lg px-3 py-2">
-                    <div class="text-xs text-gray-500">{{ __('activitylog-browse::messages.total_logs') }}</div>
-                    <div class="text-lg font-bold text-gray-900" x-text="info.stats.total_logs?.toLocaleString()"></div>
-                </div>
-                <div class="bg-gray-50 rounded-lg px-3 py-2">
-                    <div class="text-xs text-gray-500">{{ __('activitylog-browse::messages.unique_records') }}</div>
-                    <div class="text-lg font-bold text-gray-900" x-text="info.stats.unique_subjects?.toLocaleString()"></div>
-                </div>
-                <div class="bg-gray-50 rounded-lg px-3 py-2">
-                    <div class="text-xs text-gray-500">{{ __('activitylog-browse::messages.table_name') }}</div>
-                    <div class="text-lg font-bold text-gray-900 font-mono" x-text="info.stats.table_name ?? '-'"></div>
-                </div>
-                <div class="bg-gray-50 rounded-lg px-3 py-2">
-                    <div class="text-xs text-gray-500">{{ __('activitylog-browse::messages.stats_table_size') }}</div>
-                    <div class="text-lg font-bold text-gray-900" x-text="formatSize(info.stats.table_size)"></div>
-                </div>
-                <div class="bg-gray-50 rounded-lg px-3 py-2">
-                    <div class="text-xs text-gray-500">{{ __('activitylog-browse::messages.event') }}</div>
-                    <div class="flex flex-wrap gap-1 mt-1">
-                        <template x-for="(count, event) in info.stats.events" :key="event">
-                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium"
-                                  :class="{
-                                      'bg-green-100 text-green-800': event === 'created',
-                                      'bg-blue-100 text-blue-800': event === 'updated',
-                                      'bg-red-100 text-red-800': event === 'deleted',
-                                      'bg-gray-100 text-gray-800': !['created','updated','deleted'].includes(event)
-                                  }">
-                                <span x-text="event"></span>
-                                <span class="opacity-70" x-text="count"></span>
-                            </span>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Attributes grid --}}
-            <div class="mb-2">
-                <div class="text-xs font-medium text-gray-500 uppercase mb-2">
-                    {{ __('activitylog-browse::messages.model_attributes') }}
-                    <span class="text-gray-400 normal-case" x-text="'(' + info.attributes.length + ')'"></span>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <template x-for="attr in filteredAttrs" :key="attr.key">
-                        <button type="button"
-                                @click="toggleAttribute(attr.key)"
-                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border cursor-pointer transition-colors"
-                                :class="isAttrSelected(attr.key)
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'"
-                                :title="'{{ __('activitylog-browse::messages.click_to_filter') }}'">
-                            <svg x-show="isAttrSelected(attr.key)" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                            </svg>
-                            <span class="font-medium" x-text="attr.label"></span>
-                            <span class="opacity-70" x-show="attr.has_translation" x-text="'(' + attr.key + ')'"></span>
-                            <span x-show="!attr.has_translation" class="font-mono opacity-70" x-text="attr.key === attr.label ? '' : attr.key"></span>
-                        </button>
-                    </template>
-                    <template x-if="filteredAttrs.length === 0 && search">
-                        <span class="text-sm text-gray-400 italic py-1">{{ __('activitylog-browse::messages.no_data') }}</span>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </template>
-</div>
-
 <script>
     function toggleAttribute(key) {
-        var params = new URLSearchParams(window.location.search);
-        var current = params.get('changed_attribute');
+        var url = new URL(window.location.href);
+        var subjectType = document.querySelector('input[name="subject_type"]');
+        if (subjectType && subjectType.value) {
+            url.searchParams.set('subject_type', subjectType.value);
+        }
+        var current = url.searchParams.get('changed_attribute');
         var list = current ? current.split(',').filter(Boolean) : [];
         var idx = list.indexOf(key);
         if (idx === -1) {
@@ -415,11 +302,11 @@
             list.splice(idx, 1);
         }
         if (list.length > 0) {
-            params.set('changed_attribute', list.join(','));
+            url.searchParams.set('changed_attribute', list.join(','));
         } else {
-            params.delete('changed_attribute');
+            url.searchParams.delete('changed_attribute');
         }
-        window.location.search = params.toString();
+        window.location.href = url.toString();
     }
 
     var attributesUrl = '{{ route("activitylog-browse.attributes") }}';

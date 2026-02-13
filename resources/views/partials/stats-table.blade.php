@@ -31,7 +31,9 @@
                     <template x-for="(item, idx) in s('{{ $sectionKey }}').{{ $dataKey }}" :key="idx">
                         <tr>
                             <td class="px-4 py-2 text-sm font-medium text-gray-900 {{ $mono ? 'font-mono' : '' }}">
-                                @if($badge)
+                                @if($translate)
+                                    <span x-html="translateAttr(item.{{ $itemKey }})"></span>
+                                @elseif($badge)
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
                                         :class="{
                                             'bg-green-100 text-green-800': item.{{ $itemKey }} === 'created',
