@@ -8,7 +8,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="w-full px-4 sm:px-6 lg:px-8 py-8">
         <header class="mb-8 flex items-center justify-between">
             <h1 class="text-2xl font-bold text-gray-900">
                 <a href="{{ route('activitylog-browse.index') }}" class="hover:text-blue-600">{{ __('activitylog-browse::messages.activity_log') }}</a>

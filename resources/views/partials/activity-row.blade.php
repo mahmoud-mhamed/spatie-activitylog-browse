@@ -25,10 +25,45 @@
                 {{ $activity->event ?? '-' }}
             </span>
             @if($old || $attributes)
-                <div x-data="{ open: false, pos: { top: 0, left: 0 } }" class="relative group">
+                @php
+                    $allKeys = array_unique(array_merge(array_keys($old ?? []), array_keys($attributes ?? [])));
+                    sort($allKeys);
+                    $diffRows = [];
+                    foreach ($allKeys as $key) {
+                        $diffRows[] = [
+                            'key' => $key,
+                            'old' => $old ? Str::limit(is_array($old[$key] ?? null) ? json_encode($old[$key]) : (string) ($old[$key] ?? '-'), 30) : null,
+                            'new' => $attributes ? Str::limit(is_array($attributes[$key] ?? null) ? json_encode($attributes[$key]) : (string) ($attributes[$key] ?? '-'), 30) : null,
+                        ];
+                    }
+                @endphp
+                <div x-data="{
+                    open: false,
+                    pos: { top: 0, left: 0 },
+                    diffSearch: '',
+                    hideEmpty: false,
+                    rows: @js($diffRows),
+                    hasOld: @js((bool) $old),
+                    hasNew: @js((bool) $attributes),
+                    isEmpty(row) {
+                        let oldEmpty = !row.old || row.old === '-' || row.old === '';
+                        let newEmpty = !row.new || row.new === '-' || row.new === '';
+                        return oldEmpty && newEmpty;
+                    },
+                    get filteredRows() {
+                        let result = this.rows;
+                        if (this.hideEmpty) {
+                            result = result.filter(r => !this.isEmpty(r));
+                        }
+                        if (!this.diffSearch) return result;
+                        let s = this.diffSearch.toLowerCase();
+                        return result.filter(r => r.key.toLowerCase().includes(s) || (r.old && r.old.toLowerCase().includes(s)) || (r.new && r.new.toLowerCase().includes(s)));
+                    }
+                }" class="relative group">
                     <button @click="
                         let rect = $el.getBoundingClientRect();
-                        pos = { top: rect.top + window.scrollY - 8, left: rect.left + window.scrollX - 320 };
+                        let isRtl = document.documentElement.dir === 'rtl';
+                        pos = { top: rect.top + window.scrollY - 8, left: isRtl ? rect.right + window.scrollX : rect.left + window.scrollX - 320 };
                         open = !open;
                     " type="button"
                             class="text-gray-400 mt-1 hover:text-gray-600 focus:outline-none">
@@ -42,29 +77,43 @@
                     <template x-teleport="body">
                         <div x-show="open" x-transition @click.outside="open = false"
                              :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                             class="fixed z-[9999] w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
-                            <div class="text-xs font-semibold text-gray-500 uppercase mb-2">{{ __('activitylog-browse::messages.changes') }}</div>
+                             class="fixed z-[9999] w-160 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.changes') }}</div>
+                                <div class="flex items-center gap-2">
+                                    <label @click.stop class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer whitespace-nowrap select-none">
+                                        <input type="checkbox" x-model="hideEmpty" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3 w-3">
+                                        {{ __('activitylog-browse::messages.hide_empty') }}
+                                    </label>
+                                    <template x-if="rows.length > 5">
+                                        <input type="text" x-model="diffSearch"
+                                               @click.stop
+                                               placeholder="{{ __('activitylog-browse::messages.search') }}..."
+                                               class="rounded border-gray-300 text-xs px-2 py-1 border focus:border-blue-500 focus:ring-blue-500 w-32">
+                                    </template>
+                                </div>
+                            </div>
                             <table class="w-full text-xs">
                                 <thead>
                                     <tr class="border-b border-gray-100">
-                                        <th class="text-left py-1 pr-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
-                                        @if($old)<th class="text-left py-1 pr-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.old') }}</th>@endif
-                                        @if($attributes)<th class="text-left py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.new') }}</th>@endif
+                                        <th class="text-start py-1 pe-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
+                                        <th x-show="hasOld" class="text-start py-1 pe-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.old') }}</th>
+                                        <th x-show="hasNew" class="text-start py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.new') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @php $allKeys = array_unique(array_merge(array_keys($old ?? []), array_keys($attributes ?? []))); sort($allKeys); @endphp
-                                    @foreach($allKeys as $key)
+                                    <template x-for="row in filteredRows" :key="row.key">
                                         <tr class="border-b border-gray-50">
-                                            <td class="py-1 pr-2 font-medium text-gray-700">{{ $key }}</td>
-                                            @if($old)
-                                                <td class="py-1 pr-2 text-red-600">{{ Str::limit(is_array($old[$key] ?? null) ? json_encode($old[$key]) : ($old[$key] ?? '-'), 30) }}</td>
-                                            @endif
-                                            @if($attributes)
-                                                <td class="py-1 text-green-600">{{ Str::limit(is_array($attributes[$key] ?? null) ? json_encode($attributes[$key]) : ($attributes[$key] ?? '-'), 30) }}</td>
-                                            @endif
+                                            <td class="py-1 pe-2 font-medium text-gray-700" x-text="row.key"></td>
+                                            <td x-show="hasOld" class="py-1 pe-2 text-red-600" x-text="row.old"></td>
+                                            <td x-show="hasNew" class="py-1 text-green-600" x-text="row.new"></td>
                                         </tr>
-                                    @endforeach
+                                    </template>
+                                    <template x-if="filteredRows.length === 0 && diffSearch">
+                                        <tr>
+                                            <td colspan="3" class="py-2 text-gray-400 italic">{{ __('activitylog-browse::messages.no_data') }}</td>
+                                        </tr>
+                                    </template>
                                 </tbody>
                             </table>
                         </div>
@@ -79,10 +128,31 @@
             <div class="flex items-center gap-2">
                 <span>{{ class_basename($activity->subject_type) }} <span class="text-gray-400">#{{ $activity->subject_id }}</span></span>
                 @if($activity->subject_type)
-                    <div x-data="{ open: false, pos: { top: 0, left: 0 }, loading: false, attrs: null }" class="relative group">
+                    <div x-data="{
+                        open: false,
+                        pos: { top: 0, left: 0 },
+                        loading: false,
+                        attrs: null,
+                        attrSearch: '',
+                        hideEmpty: false,
+                        isEmpty(v) {
+                            return v === null || v === '' || v === 0 || v === '0' || v === false;
+                        },
+                        get filteredKeys() {
+                            if (!this.attrs) return [];
+                            let keys = Object.keys(this.attrs).sort();
+                            if (this.hideEmpty) {
+                                keys = keys.filter(k => !this.isEmpty(this.attrs[k]));
+                            }
+                            if (!this.attrSearch) return keys;
+                            let s = this.attrSearch.toLowerCase();
+                            return keys.filter(k => k.toLowerCase().includes(s) || String(this.attrs[k] ?? '').toLowerCase().includes(s));
+                        }
+                    }" class="relative group">
                         <button @click="
                             let rect = $el.getBoundingClientRect();
-                            pos = { top: rect.top + window.scrollY - 8, left: rect.left + window.scrollX - 320 };
+                            let isRtl = document.documentElement.dir === 'rtl';
+                            pos = { top: rect.top + window.scrollY - 8, left: isRtl ? rect.right + window.scrollX : rect.left + window.scrollX - 320 };
                             if (!open && attrs === null) {
                                 loading = true;
                                 fetch('{{ route('activitylog-browse.subject-attributes', $activity->id) }}')
@@ -103,8 +173,22 @@
                         <template x-teleport="body">
                             <div x-show="open" x-transition @click.outside="open = false"
                                  :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                                 class="fixed z-[9999] w-80 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
-                                <div class="text-xs font-semibold text-gray-500 uppercase mb-2">{{ __('activitylog-browse::messages.current_attributes') }}</div>
+                                 class="fixed z-[9999] w-160 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.current_attributes') }}</div>
+                                    <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 5">
+                                        <div class="flex items-center gap-2">
+                                            <label @click.stop class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer whitespace-nowrap select-none">
+                                                <input type="checkbox" x-model="hideEmpty" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3 w-3">
+                                                {{ __('activitylog-browse::messages.hide_empty') }}
+                                            </label>
+                                            <input type="text" x-model="attrSearch"
+                                                   @click.stop
+                                                   placeholder="{{ __('activitylog-browse::messages.search') }}..."
+                                                   class="rounded border-gray-300 text-xs px-2 py-1 border focus:border-blue-500 focus:ring-blue-500 w-32">
+                                        </div>
+                                    </template>
+                                </div>
                                 <template x-if="loading">
                                     <div class="flex justify-center py-4">
                                         <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -120,15 +204,20 @@
                                     <table class="w-full text-xs">
                                         <thead>
                                             <tr class="border-b border-gray-100">
-                                                <th class="text-left py-1 pr-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
-                                                <th class="text-left py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.value') }}</th>
+                                                <th class="text-start py-1 pe-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
+                                                <th class="text-start py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.value') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <template x-for="key in Object.keys(attrs).sort()" :key="key">
+                                            <template x-for="key in filteredKeys" :key="key">
                                                 <tr class="border-b border-gray-50">
-                                                    <td class="py-1 pr-2 font-medium text-gray-700" x-text="key"></td>
+                                                    <td class="py-1 pe-2 font-medium text-gray-700" x-text="key"></td>
                                                     <td class="py-1 text-gray-600" x-text="typeof attrs[key] === 'object' && attrs[key] !== null ? JSON.stringify(attrs[key]).substring(0, 30) : String(attrs[key] ?? '').substring(0, 30)"></td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="filteredKeys.length === 0 && attrSearch">
+                                                <tr>
+                                                    <td colspan="2" class="py-2 text-gray-400 italic">{{ __('activitylog-browse::messages.no_data') }}</td>
                                                 </tr>
                                             </template>
                                         </tbody>
@@ -145,8 +234,118 @@
     </td>
     <td class="px-4 py-3 text-sm text-gray-500">
         @if($activity->causer)
-            {{ class_basename($activity->causer_type) }}
-            <span class="text-gray-400">#{{ $activity->causer_id }}</span>
+            <div class="flex items-center gap-2">
+                <div>
+                    <span>{{ class_basename($activity->causer_type) }} <span class="text-gray-400">#{{ $activity->causer_id }}</span></span>
+                    @php
+                        $causerName = $activity->causer->name
+                            ?? $activity->causer->title
+                            ?? trim(($activity->causer->first_name ?? '') . ' ' . ($activity->causer->last_name ?? ''))
+                            ?: null;
+                    @endphp
+                    @if($causerName)
+                        <div class="text-xs text-gray-400 truncate max-w-[10rem]">{{ $causerName }}</div>
+                    @endif
+                </div>
+                <div x-data="{
+                    open: false,
+                    pos: { top: 0, left: 0 },
+                    loading: false,
+                    attrs: null,
+                    attrSearch: '',
+                    hideEmpty: false,
+                    isEmpty(v) {
+                        return v === null || v === '' || v === 0 || v === '0' || v === false;
+                    },
+                    get filteredKeys() {
+                        if (!this.attrs) return [];
+                        let keys = Object.keys(this.attrs).sort();
+                        if (this.hideEmpty) {
+                            keys = keys.filter(k => !this.isEmpty(this.attrs[k]));
+                        }
+                        if (!this.attrSearch) return keys;
+                        let s = this.attrSearch.toLowerCase();
+                        return keys.filter(k => k.toLowerCase().includes(s) || String(this.attrs[k] ?? '').toLowerCase().includes(s));
+                    }
+                }" class="relative group">
+                    <button @click="
+                        let rect = $el.getBoundingClientRect();
+                        let isRtl = document.documentElement.dir === 'rtl';
+                        pos = { top: rect.top + window.scrollY - 8, left: isRtl ? rect.right + window.scrollX : rect.left + window.scrollX - 320 };
+                        if (!open && attrs === null) {
+                            loading = true;
+                            fetch('{{ route('activitylog-browse.causer-attributes', $activity->id) }}')
+                                .then(r => r.json())
+                                .then(data => { attrs = data; loading = false; })
+                                .catch(() => { attrs = {}; loading = false; });
+                        }
+                        open = !open;
+                    " type="button"
+                            class="text-gray-400 mt-1 hover:text-purple-600 focus:outline-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                        {{ __('activitylog-browse::messages.causer_attributes') }}
+                    </span>
+                    <template x-teleport="body">
+                        <div x-show="open" x-transition @click.outside="open = false"
+                             :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
+                             class="fixed z-[9999] w-160 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.causer_attributes') }}</div>
+                                <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 5">
+                                    <div class="flex items-center gap-2">
+                                        <label @click.stop class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer whitespace-nowrap select-none">
+                                            <input type="checkbox" x-model="hideEmpty" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3 w-3">
+                                            {{ __('activitylog-browse::messages.hide_empty') }}
+                                        </label>
+                                        <input type="text" x-model="attrSearch"
+                                               @click.stop
+                                               placeholder="{{ __('activitylog-browse::messages.search') }}..."
+                                               class="rounded border-gray-300 text-xs px-2 py-1 border focus:border-blue-500 focus:ring-blue-500 w-32">
+                                    </div>
+                                </template>
+                            </div>
+                            <template x-if="loading">
+                                <div class="flex justify-center py-4">
+                                    <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                </div>
+                            </template>
+                            <template x-if="!loading && attrs !== null && Object.keys(attrs).length === 0">
+                                <div class="text-xs text-gray-400 italic py-2">{{ __('activitylog-browse::messages.causer_deleted') }}</div>
+                            </template>
+                            <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 0">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-gray-100">
+                                            <th class="text-start py-1 pe-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
+                                            <th class="text-start py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.value') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="key in filteredKeys" :key="key">
+                                            <tr class="border-b border-gray-50">
+                                                <td class="py-1 pe-2 font-medium text-gray-700" x-text="key"></td>
+                                                <td class="py-1 text-gray-600" x-text="typeof attrs[key] === 'object' && attrs[key] !== null ? JSON.stringify(attrs[key]).substring(0, 30) : String(attrs[key] ?? '').substring(0, 30)"></td>
+                                            </tr>
+                                        </template>
+                                        <template x-if="filteredKeys.length === 0 && attrSearch">
+                                            <tr>
+                                                <td colspan="2" class="py-2 text-gray-400 italic">{{ __('activitylog-browse::messages.no_data') }}</td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
         @else
             <span class="text-gray-400">{{ __('activitylog-browse::messages.system') }}</span>
         @endif

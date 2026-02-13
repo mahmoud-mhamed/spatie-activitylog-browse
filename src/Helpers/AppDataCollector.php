@@ -30,7 +30,7 @@ class AppDataCollector
         }
 
         if ($fields['server_hostname'] ?? false) {
-            $data['server_hostname'] = gethostname();
+            $data['server_hostname'] = gethostname() ?: 'unknown';
         }
 
         return $data ? ['app_data' => $data] : [];

@@ -1,11 +1,29 @@
 # Activity Log Browse
 
-A Laravel package that extends [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog) v4 with:
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
+[![License](https://img.shields.io/packagist/l/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
+[![PHP Version](https://img.shields.io/packagist/php-v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
 
-- **Auto-log all models** — Automatically log created/updated/deleted events for ALL Eloquent models without adding the `LogsActivity` trait
-- **Request & device enrichment** — Attach URL, IP, user agent, referrer, and more to every activity log entry
-- **Browse UI** — Web interface to view, filter, and inspect activity logs
-- **Localization** — Built-in support for English and Arabic (RTL)
+A Laravel package that extends [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog) v4 with automatic model logging, rich contextual enrichment, and a web-based log browser.
+
+## Features
+
+- **Auto-log all models** — Automatically log created/updated/deleted events for all Eloquent models without adding the `LogsActivity` trait
+- **Rich enrichment** — Attach request, device, performance, app, session, and execution context data to every log entry
+- **Browse UI** — Web interface to view, filter, search, and inspect activity logs with quick-preview popovers and color-coded diffs
+- **Related model browsing** — Navigate between related model logs via auto-discovered Eloquent relationships
+- **Localization** — Built-in support for English and Arabic with RTL layout
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Browse UI](#browse-ui)
+- [Localization](#localization)
+- [Architecture](#architecture)
+- [License](#license)
 
 ## Requirements
 
@@ -75,7 +93,7 @@ php artisan activitylog-browse:install
 
 ## Configuration
 
-The config file `config/activitylog-browse.php` has four sections:
+After publishing, the config file is located at `config/activitylog-browse.php`. It has the following sections:
 
 ### Auto-Log
 
@@ -87,7 +105,7 @@ The config file `config/activitylog-browse.php` has four sections:
     'excluded_models' => [],
     'log_name' => 'default',
     'log_only_dirty' => true,
-    'excluded_attributes' => ['password', 'remember_token'],
+    'excluded_attributes' => ['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'],
     'submit_empty_logs' => false,
 ],
 ```
@@ -130,7 +148,57 @@ Models that already use the `LogsActivity` trait are automatically skipped to pr
 ],
 ```
 
-Both collectors gracefully return empty arrays when running in console/queue context.
+### Performance Data Enrichment
+
+```php
+'performance_data' => [
+    'enabled' => true,
+    'fields' => [
+        'request_duration' => true,  // milliseconds since LARAVEL_START
+        'memory_peak' => true,       // peak memory usage in bytes
+        'db_query_count' => true,    // number of DB queries executed
+    ],
+],
+```
+
+### App Data Enrichment
+
+```php
+'app_data' => [
+    'enabled' => true,
+    'fields' => [
+        'environment' => true,       // e.g. "local", "production"
+        'php_version' => true,
+        'server_hostname' => true,
+    ],
+],
+```
+
+### Session Data Enrichment
+
+```php
+'session_data' => [
+    'enabled' => true,
+    'fields' => [
+        'auth_guard' => true,        // the guard used for authentication
+    ],
+],
+```
+
+### Execution Context Enrichment
+
+```php
+'execution_context' => [
+    'enabled' => true,
+    'fields' => [
+        'source' => true,            // "web", "console", "queue", or "schedule"
+        'job_name' => true,          // queue job class name
+        'command_name' => true,      // artisan command name
+    ],
+],
+```
+
+All enrichment collectors gracefully return empty arrays when running in console/queue context where request data is unavailable.
 
 ### Browse UI
 
@@ -141,34 +209,11 @@ Both collectors gracefully return empty arrays when running in console/queue con
     'middleware' => ['web', 'auth'],
     'per_page' => 25,
     'gate' => null,
+    'available_locales' => ['en', 'ar'],
 ],
 ```
 
 Set `gate` to a gate name to restrict access (e.g. `'gate' => 'view-activity-log'`).
-
-## Localization
-
-The package ships with English and Arabic translations. The UI automatically adapts to RTL layout when the locale is `ar`.
-
-Set the locale in your `config/app.php`:
-
-```php
-'locale' => 'ar',
-```
-
-Or switch at runtime:
-
-```php
-App::setLocale('ar');
-```
-
-To customize translations, publish the language files:
-
-```bash
-php artisan vendor:publish --tag=activitylog-browse-lang
-```
-
-This copies the files to `lang/vendor/activitylog-browse/` where you can edit them or add new languages.
 
 ## Usage
 
@@ -192,7 +237,7 @@ To exclude specific models:
 
 ### Enrichment
 
-Every activity log entry (including those from the `LogsActivity` trait or manual `activity()` calls) is enriched with request and device data:
+Every activity log entry (including those from the `LogsActivity` trait or manual `activity()` calls) is automatically enriched with contextual data:
 
 ```json
 {
@@ -206,32 +251,81 @@ Every activity log entry (including those from the `LogsActivity` trait or manua
     "device_data": {
         "ip": "192.168.1.1",
         "user_agent": "Mozilla/5.0 ..."
+    },
+    "performance_data": {
+        "request_duration": 142,
+        "memory_peak": 12582912,
+        "db_query_count": 8
+    },
+    "app_data": {
+        "environment": "production",
+        "php_version": "8.3.0",
+        "server_hostname": "web-01"
+    },
+    "session_data": {
+        "auth_guard": "web"
+    },
+    "execution_context": {
+        "source": "web",
+        "job_name": null,
+        "command_name": null
     }
 }
 ```
 
-### Browse UI
+## Browse UI
 
 Visit `/activity-log` (or your configured prefix) to browse logs. The UI provides:
 
-- Filterable list by log name, event type, model, model ID, causer, date range, and description search
-- Changed attribute filter — select a model, then filter by specific attribute (e.g. only show logs where `name` changed)
-- Quick preview popover on each row showing old/new value diff
-- Current attributes popover on each subject showing live model data
-- Link to view all logs for a specific model instance
-- Detail view with color-coded old/new value diff
-- Request and device data sections
-- Raw JSON view
+- **Filtering** — Filter by log name, event type, model type, model ID, causer, date range, and description search
+- **Changed attribute filter** — Select a model type, then filter by a specific attribute (e.g. only show logs where `name` changed)
+- **Quick preview popover** — Hover on a row's info icon to see old/new value diff without leaving the list
+- **Current attributes popover** — View the subject's live model data from the list
+- **Related model navigation** — Click through to view all logs for a related model instance
+- **Detail view** — Color-coded old/new value diff, request data, device data, performance metrics (with Fast/Normal/Slow badges), app info, session info, execution context, and raw JSON view
+- **Language switcher** — Toggle between available locales directly from the UI
 
-## How It Works
+## Localization
 
-| Component                    | Role                                                                                                       |
-|------------------------------|------------------------------------------------------------------------------------------------------------|
-| `GlobalModelLogger`          | Listens to global Eloquent events and logs activity for models without the `LogsActivity` trait             |
-| `ActivityEnrichmentObserver` | Observes the Activity model's `creating` event to merge request/device data into properties before save     |
-| `RequestDataCollector`       | Gathers URL, method, route name from the current request                                                   |
-| `DeviceDataCollector`        | Gathers IP, user agent, referrer from the current request                                                  |
-| `ActivityLogController`      | Handles the browse UI with filtering, pagination, and attribute AJAX endpoint                               |
+The package ships with English and Arabic translations. The UI automatically adapts to RTL layout when the locale is `ar`.
+
+Set the locale in your `config/app.php`:
+
+```php
+'locale' => 'ar',
+```
+
+Or switch at runtime:
+
+```php
+App::setLocale('ar');
+```
+
+The browse UI also includes a language switcher button that saves the preference in the session.
+
+To customize translations, publish the language files:
+
+```bash
+php artisan vendor:publish --tag=activitylog-browse-lang
+```
+
+This copies the files to `lang/vendor/activitylog-browse/` where you can edit them or add new languages.
+
+## Architecture
+
+| Component | Role |
+|---|---|
+| `GlobalModelLogger` | Listens to global Eloquent events and logs activity for models without the `LogsActivity` trait |
+| `ActivityEnrichmentObserver` | Observes the Activity model's `creating` event to merge all enrichment data into properties before save |
+| `RequestDataCollector` | Gathers URL, method, route name, previous URL from the current request |
+| `DeviceDataCollector` | Gathers IP, user agent, referrer from the current request |
+| `PerformanceDataCollector` | Captures request duration, peak memory usage, and DB query count |
+| `AppDataCollector` | Records environment, PHP version, and server hostname |
+| `SessionDataCollector` | Identifies the authentication guard used |
+| `ExecutionContextCollector` | Determines execution source (web/console/queue/schedule) and captures job/command names |
+| `RelationDiscovery` | Uses reflection to auto-discover Eloquent relationships for related model browsing |
+| `ActivityLogController` | Handles the browse UI with filtering, pagination, AJAX endpoints, and attribute inspection |
+| `SetLocale` | Middleware that applies the user's locale preference from the session |
 
 ## License
 

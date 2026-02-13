@@ -4,7 +4,12 @@
 
 @section('content')
     <div class="mb-4 flex items-center gap-3 text-sm">
-        <a href="{{ route('activitylog-browse.index') }}" class="text-blue-600 hover:text-blue-800">&larr; {{ __('activitylog-browse::messages.back_to_list') }}</a>
+        <a href="{{ route('activitylog-browse.index') }}" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                {{ __('activitylog-browse::messages.back_to_list') }}
+            </a>
         @if($activity->subject_type)
             <span class="text-gray-300">|</span>
             <a href="{{ route('activitylog-browse.index', ['subject_type' => $activity->subject_type, 'subject_id' => $activity->subject_id]) }}"
@@ -98,12 +103,12 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.attribute') }}</th>
+                            <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.attribute') }}</th>
                             @if($old)
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.old') }}</th>
+                                <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.old') }}</th>
                             @endif
                             @if($attributes)
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.new') }}</th>
+                                <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.new') }}</th>
                             @endif
                         </tr>
                     </thead>
@@ -194,8 +199,8 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.key') }}</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.value') }}</th>
+                                <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.key') }}</th>
+                                <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.value') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
@@ -321,10 +326,10 @@
     {{-- Raw JSON --}}
     <div class="bg-white rounded-lg shadow mb-6">
         <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">{{ __('activitylog-browse::messages.raw_properties') }}</h2>
+            <h2 class="text-lg font-semibold text-gray-900">Raw Properties</h2>
         </div>
         <div class="px-6 py-4">
-            <pre class="text-xs bg-gray-50 p-4 rounded overflow-x-auto">{{ json_encode($properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+            <pre dir="ltr" class="text-left text-xs bg-gray-50 p-4 rounded overflow-x-auto">{{ json_encode($properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
         </div>
     </div>
 @endsection
