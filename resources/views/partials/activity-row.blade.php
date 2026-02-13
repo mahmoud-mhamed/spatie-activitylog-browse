@@ -78,16 +78,18 @@
         @if($activity->subject_type)
             <div class="flex items-center gap-2">
                 <span>{{ class_basename($activity->subject_type) }} <span class="text-gray-400">#{{ $activity->subject_id }}</span></span>
-                @if($activity->subject)
-                    @php
-                        $excludedAttributes = config('activitylog-browse.auto_log.excluded_attributes', []);
-                        $currentAttrs = array_diff_key($activity->subject->getAttributes(), array_flip($excludedAttributes));
-                        ksort($currentAttrs);
-                    @endphp
-                    <div x-data="{ open: false, pos: { top: 0, left: 0 } }" class="relative group">
+                @if($activity->subject_type)
+                    <div x-data="{ open: false, pos: { top: 0, left: 0 }, loading: false, attrs: null }" class="relative group">
                         <button @click="
                             let rect = $el.getBoundingClientRect();
                             pos = { top: rect.top + window.scrollY - 8, left: rect.left + window.scrollX - 320 };
+                            if (!open && attrs === null) {
+                                loading = true;
+                                fetch('{{ route('activitylog-browse.subject-attributes', $activity->id) }}')
+                                    .then(r => r.json())
+                                    .then(data => { attrs = data; loading = false; })
+                                    .catch(() => { attrs = {}; loading = false; });
+                            }
                             open = !open;
                         " type="button"
                                 class="text-gray-400 mt-1 hover:text-purple-600 focus:outline-none">
@@ -103,22 +105,35 @@
                                  :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
                                  class="fixed z-[9999] w-80 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
                                 <div class="text-xs font-semibold text-gray-500 uppercase mb-2">{{ __('activitylog-browse::messages.current_attributes') }}</div>
-                                <table class="w-full text-xs">
-                                    <thead>
-                                        <tr class="border-b border-gray-100">
-                                            <th class="text-left py-1 pr-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
-                                            <th class="text-left py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.value') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($currentAttrs as $key => $val)
-                                            <tr class="border-b border-gray-50">
-                                                <td class="py-1 pr-2 font-medium text-gray-700">{{ $key }}</td>
-                                                <td class="py-1 text-gray-600">{{ Str::limit(is_array($val) ? json_encode($val) : (string) $val, 30) }}</td>
+                                <template x-if="loading">
+                                    <div class="flex justify-center py-4">
+                                        <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                        </svg>
+                                    </div>
+                                </template>
+                                <template x-if="!loading && attrs !== null && Object.keys(attrs).length === 0">
+                                    <div class="text-xs text-gray-400 italic py-2">{{ __('activitylog-browse::messages.model_deleted') }}</div>
+                                </template>
+                                <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 0">
+                                    <table class="w-full text-xs">
+                                        <thead>
+                                            <tr class="border-b border-gray-100">
+                                                <th class="text-left py-1 pr-2 text-gray-500 font-medium">{{ __('activitylog-browse::messages.attr') }}</th>
+                                                <th class="text-left py-1 text-gray-500 font-medium">{{ __('activitylog-browse::messages.value') }}</th>
                                             </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="key in Object.keys(attrs).sort()" :key="key">
+                                                <tr class="border-b border-gray-50">
+                                                    <td class="py-1 pr-2 font-medium text-gray-700" x-text="key"></td>
+                                                    <td class="py-1 text-gray-600" x-text="typeof attrs[key] === 'object' && attrs[key] !== null ? JSON.stringify(attrs[key]).substring(0, 30) : String(attrs[key] ?? '').substring(0, 30)"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
                             </div>
                         </template>
                     </div>

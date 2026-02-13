@@ -15,8 +15,10 @@ return [
     'model_id_placeholder' => 'e.g. 1',
     'changed_attribute' => 'Changed Attribute',
     'causer_type' => 'Causer',
+    'select_causer' => 'Select Causer',
     'causer_id' => 'Causer ID',
     'causer_id_placeholder' => 'e.g. 1',
+    'loading' => 'Loading',
     'from' => 'From',
     'to' => 'To',
     'filter' => 'Filter',
@@ -36,6 +38,7 @@ return [
 
     // Show page
     'back_to_list' => 'Back to list',
+    'all_model_logs' => 'All logs for :model',
     'batch_uuid' => 'Batch UUID',
     'changes' => 'Changes',
     'attribute' => 'Attribute',
@@ -43,6 +46,13 @@ return [
     'new' => 'New',
     'request_data' => 'Request Data',
     'device_data' => 'Device Data',
+    'performance_data' => 'Performance Data',
+    'app_data' => 'App Data',
+    'session_data' => 'Session Data',
+    'execution_context' => 'Execution Context',
+    'speed_fast' => 'Fast',
+    'speed_normal' => 'Normal',
+    'speed_slow' => 'Slow',
     'raw_properties' => 'Raw Properties',
 
     // Properties display
@@ -52,6 +62,12 @@ return [
     'null' => 'null',
     'true' => 'true',
     'false' => 'false',
+
+    // Related models
+    'related_models' => 'Related Models',
+    'related_logs_for' => ':model — :relation logs',
+    'back_to_activity' => 'Back to activity #:id',
+    'no_related_logs' => 'No activity logs found for related models.',
 
     // Popover
     'quick_preview' => 'Quick preview',

@@ -7,38 +7,29 @@
                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
         </div>
 
-        <div>
-            <label for="log_name" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.log_name') }}</label>
-            <select name="log_name" id="log_name"
-                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
-                <option value="">{{ __('activitylog-browse::messages.all') }}</option>
-                @foreach($logNames as $name)
-                    <option value="{{ $name }}" @selected(request('log_name') === $name)>{{ $name }}</option>
-                @endforeach
-            </select>
-        </div>
+        @include('activitylog-browse::partials.searchable-select', [
+            'name' => 'log_name',
+            'label' => __('activitylog-browse::messages.log_name'),
+            'allLabel' => __('activitylog-browse::messages.all'),
+            'selected' => request('log_name', ''),
+            'options' => $logNames->map(fn($n) => ['value' => $n, 'label' => $n])->all(),
+        ])
 
-        <div>
-            <label for="event" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.event') }}</label>
-            <select name="event" id="event"
-                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
-                <option value="">{{ __('activitylog-browse::messages.all') }}</option>
-                @foreach($events as $event)
-                    <option value="{{ $event }}" @selected(request('event') === $event)>{{ $event }}</option>
-                @endforeach
-            </select>
-        </div>
+        @include('activitylog-browse::partials.searchable-select', [
+            'name' => 'event',
+            'label' => __('activitylog-browse::messages.event'),
+            'allLabel' => __('activitylog-browse::messages.all'),
+            'selected' => request('event', ''),
+            'options' => $events->map(fn($e) => ['value' => $e, 'label' => $e])->all(),
+        ])
 
-        <div>
-            <label for="subject_type" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.model') }}</label>
-            <select name="subject_type" id="subject_type"
-                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
-                <option value="">{{ __('activitylog-browse::messages.all') }}</option>
-                @foreach($subjectTypes as $type)
-                    <option value="{{ $type }}" @selected(request('subject_type') === $type)>{{ class_basename($type) }}</option>
-                @endforeach
-            </select>
-        </div>
+        @include('activitylog-browse::partials.searchable-select', [
+            'name' => 'subject_type',
+            'label' => __('activitylog-browse::messages.model'),
+            'allLabel' => __('activitylog-browse::messages.all'),
+            'selected' => request('subject_type', ''),
+            'options' => $subjectTypes->map(fn($t) => ['value' => $t, 'label' => class_basename($t)])->all(),
+        ])
 
         <div id="subject_id_wrapper" style="{{ request('subject_type') ? '' : 'display:none' }}">
             <label for="subject_id" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.model_id') }}</label>
@@ -48,23 +39,22 @@
         </div>
 
         <div id="changed_attribute_wrapper" style="{{ request('subject_type') ? '' : 'display:none' }}">
-            <label for="changed_attribute" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.changed_attribute') }}</label>
-            <select name="changed_attribute" id="changed_attribute"
-                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
-                <option value="">{{ __('activitylog-browse::messages.all') }}</option>
-            </select>
+            @include('activitylog-browse::partials.searchable-select', [
+                'name' => 'changed_attribute',
+                'label' => __('activitylog-browse::messages.changed_attribute'),
+                'allLabel' => __('activitylog-browse::messages.all'),
+                'selected' => request('changed_attribute', ''),
+                'options' => [],
+            ])
         </div>
 
-        <div>
-            <label for="causer_type" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.causer_type') }}</label>
-            <select name="causer_type" id="causer_type"
-                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
-                <option value="">{{ __('activitylog-browse::messages.all') }}</option>
-                @foreach($causerTypes as $type)
-                    <option value="{{ $type }}" @selected(request('causer_type') === $type)>{{ class_basename($type) }}</option>
-                @endforeach
-            </select>
-        </div>
+        @include('activitylog-browse::partials.searchable-select', [
+            'name' => 'causer_type',
+            'label' => __('activitylog-browse::messages.causer_type'),
+            'allLabel' => __('activitylog-browse::messages.all'),
+            'selected' => request('causer_type', ''),
+            'options' => $causerTypes->map(fn($t) => ['value' => $t, 'label' => class_basename($t)])->all(),
+        ])
 
         <div id="causer_id_wrapper" style="{{ request('causer_type') ? '' : 'display:none' }}">
             <label for="causer_id" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.causer_id') }}</label>
@@ -101,15 +91,19 @@
 <script>
     var attributesUrl = '{{ route("activitylog-browse.attributes") }}';
     var savedAttribute = '{{ request("changed_attribute") }}';
+    var allLabel = '{{ __("activitylog-browse::messages.all") }}';
 
     function fetchAttributes(subjectType) {
         var wrapper = document.getElementById('changed_attribute_wrapper');
-        var select = document.getElementById('changed_attribute');
-        var allLabel = '{{ __("activitylog-browse::messages.all") }}';
+        var attrEl = document.querySelector('#changed_attribute_wrapper [x-data]');
 
         if (!subjectType) {
             wrapper.style.display = 'none';
-            select.innerHTML = '<option value="">' + allLabel + '</option>';
+            if (attrEl) {
+                var d = Alpine.$data(attrEl);
+                d.options = [];
+                d.pick('', allLabel);
+            }
             return;
         }
 
@@ -118,40 +112,55 @@
         fetch(attributesUrl + '?subject_type=' + encodeURIComponent(subjectType))
             .then(function(r) { return r.json(); })
             .then(function(attrs) {
-                var html = '<option value="">' + allLabel + '</option>';
-                attrs.forEach(function(attr) {
-                    var selected = (attr === savedAttribute) ? ' selected' : '';
-                    html += '<option value="' + attr + '"' + selected + '>' + attr + '</option>';
-                });
-                select.innerHTML = html;
+                if (!attrEl) return;
+                var d = Alpine.$data(attrEl);
+                d.options = attrs.map(function(a) { return { value: a, label: a }; });
+                if (savedAttribute) {
+                    d.pick(savedAttribute, savedAttribute);
+                    savedAttribute = '';
+                } else {
+                    d.pick('', allLabel);
+                }
             });
     }
 
-    document.getElementById('subject_type').addEventListener('change', function () {
-        var wrapper = document.getElementById('subject_id_wrapper');
-        var input = document.getElementById('subject_id');
-        if (this.value) {
-            wrapper.style.display = '';
-        } else {
-            wrapper.style.display = 'none';
-            input.value = '';
+    document.addEventListener('DOMContentLoaded', function() {
+        // Listen for subject_type changes
+        var subjectHidden = document.querySelector('input[name="subject_type"]');
+        if (subjectHidden) {
+            subjectHidden.addEventListener('change', function() {
+                var val = this.value;
+                var idWrapper = document.getElementById('subject_id_wrapper');
+                var idInput = document.getElementById('subject_id');
+                if (val) {
+                    idWrapper.style.display = '';
+                } else {
+                    idWrapper.style.display = 'none';
+                    idInput.value = '';
+                }
+                fetchAttributes(val);
+            });
+
+            // Load attributes on page load if model is pre-selected
+            if (subjectHidden.value) {
+                fetchAttributes(subjectHidden.value);
+            }
         }
-        fetchAttributes(this.value);
-    });
 
-    // Load attributes on page load if model is pre-selected
-    if (document.getElementById('subject_type').value) {
-        fetchAttributes(document.getElementById('subject_type').value);
-    }
-
-    document.getElementById('causer_type').addEventListener('change', function () {
-        var wrapper = document.getElementById('causer_id_wrapper');
-        var input = document.getElementById('causer_id');
-        if (this.value) {
-            wrapper.style.display = '';
-        } else {
-            wrapper.style.display = 'none';
-            input.value = '';
+        // Listen for causer_type changes
+        var causerHidden = document.querySelector('input[name="causer_type"]');
+        if (causerHidden) {
+            causerHidden.addEventListener('change', function() {
+                var val = this.value;
+                var idWrapper = document.getElementById('causer_id_wrapper');
+                var idInput = document.getElementById('causer_id');
+                if (val) {
+                    idWrapper.style.display = '';
+                } else {
+                    idWrapper.style.display = 'none';
+                    idInput.value = '';
+                }
+            });
         }
     });
 </script>

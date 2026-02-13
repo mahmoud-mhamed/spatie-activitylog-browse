@@ -83,6 +83,84 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Performance Data Enrichment
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, performance metrics (duration, memory, query count) are
+    | automatically attached to every activity log entry.
+    |
+    */
+
+    'performance_data' => [
+        'enabled' => true,
+
+        'fields' => [
+            'request_duration' => true,
+            'memory_peak' => true,
+            'db_query_count' => true,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | App Data Enrichment
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, application context (environment, versions, hostname) is
+    | automatically attached to every activity log entry.
+    |
+    */
+
+    'app_data' => [
+        'enabled' => true,
+
+        'fields' => [
+            'environment' => true,
+            'php_version' => true,
+            'server_hostname' => true,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Data Enrichment
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, session context (session ID, auth guard) is automatically
+    | attached to every activity log entry. Only available in web context.
+    |
+    */
+
+    'session_data' => [
+        'enabled' => true,
+
+        'fields' => [
+            'auth_guard' => true,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Execution Context Enrichment
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, execution context (source, job name, command name) is
+    | automatically attached to every activity log entry.
+    |
+    */
+
+    'execution_context' => [
+        'enabled' => true,
+
+        'fields' => [
+            'source' => true,
+            'job_name' => true,
+            'command_name' => true,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Browse UI
     |--------------------------------------------------------------------------
     |

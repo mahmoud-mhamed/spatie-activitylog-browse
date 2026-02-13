@@ -72,6 +72,10 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
     protected function isEnrichmentEnabled(): bool
     {
         return config('activitylog-browse.request_data.enabled', false)
-            || config('activitylog-browse.device_data.enabled', false);
+            || config('activitylog-browse.device_data.enabled', false)
+            || config('activitylog-browse.performance_data.enabled', false)
+            || config('activitylog-browse.app_data.enabled', false)
+            || config('activitylog-browse.session_data.enabled', false)
+            || config('activitylog-browse.execution_context.enabled', false);
     }
 }

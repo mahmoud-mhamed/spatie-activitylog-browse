@@ -36,6 +36,7 @@ return [
 
     // Show page
     'back_to_list' => 'العودة للقائمة',
+    'all_model_logs' => 'كل سجلات :model',
     'batch_uuid' => 'معرف الدفعة',
     'changes' => 'التغييرات',
     'attribute' => 'الخاصية',
@@ -43,6 +44,13 @@ return [
     'new' => 'الجديد',
     'request_data' => 'بيانات الطلب',
     'device_data' => 'بيانات الجهاز',
+    'performance_data' => 'بيانات الأداء',
+    'app_data' => 'بيانات التطبيق',
+    'session_data' => 'بيانات الجلسة',
+    'execution_context' => 'سياق التنفيذ',
+    'speed_fast' => 'سريع',
+    'speed_normal' => 'عادي',
+    'speed_slow' => 'بطيء',
     'raw_properties' => 'البيانات الخام',
 
     // Properties display
@@ -52,6 +60,12 @@ return [
     'null' => 'فارغ',
     'true' => 'نعم',
     'false' => 'لا',
+
+    // Related models
+    'related_models' => 'النماذج المرتبطة',
+    'related_logs_for' => ':model — سجلات :relation',
+    'back_to_activity' => 'العودة للنشاط #:id',
+    'no_related_logs' => 'لا توجد سجلات نشاط للنماذج المرتبطة.',
 
     // Popover
     'quick_preview' => 'معاينة سريعة',
