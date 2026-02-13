@@ -122,7 +122,7 @@
                         @endphp
                         @foreach($allKeys as $key)
                             <tr>
-                                <td class="px-4 py-2 text-sm font-medium text-gray-700">{{ $key }}</td>
+                                <td class="px-4 py-2 text-sm font-medium text-gray-700" title="{{ $key }}">@include('activitylog-browse::partials.translated-key', ['key' => $key])</td>
                                 @if($old)
                                     <td class="px-4 py-2 text-sm text-red-700 bg-red-50">
                                         @if(isset($old[$key]))
@@ -206,7 +206,7 @@
                         <tbody class="divide-y divide-gray-200">
                             @foreach($performanceData as $key => $value)
                                 <tr>
-                                    <td class="px-4 py-2 text-sm font-medium text-gray-700">{{ $key }}</td>
+                                    <td class="px-4 py-2 text-sm font-medium text-gray-700" title="{{ $key }}">@include('activitylog-browse::partials.translated-key', ['key' => $key])</td>
                                     <td class="px-4 py-2 text-sm text-gray-600">
                                         @if($key === 'request_duration' && is_numeric($value))
                                             @php

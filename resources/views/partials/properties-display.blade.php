@@ -10,7 +10,7 @@
             <tbody class="divide-y divide-gray-200">
                 @foreach($properties as $key => $value)
                     <tr>
-                        <td class="px-4 py-2 text-sm font-medium text-gray-700">{{ $key }}</td>
+                        <td class="px-4 py-2 text-sm font-medium text-gray-700" title="{{ $key }}">@include('activitylog-browse::partials.translated-key', ['key' => $key])</td>
                         <td class="px-4 py-2 text-sm text-gray-600">
                             @if(is_array($value) || is_object($value))
                                 <pre class="text-xs bg-gray-50 p-2 rounded overflow-x-auto">{{ json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>

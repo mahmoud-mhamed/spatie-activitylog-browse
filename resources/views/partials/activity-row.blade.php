@@ -77,7 +77,7 @@
                     <template x-teleport="body">
                         <div x-show="open" x-transition @click.outside="open = false"
                              :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                             class="fixed z-[9999] w-160 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                             class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
                             <div class="flex items-center justify-between gap-2 mb-2">
                                 <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.changes') }}</div>
                                 <div class="flex items-center gap-2">
@@ -104,7 +104,7 @@
                                 <tbody>
                                     <template x-for="row in filteredRows" :key="row.key">
                                         <tr class="border-b border-gray-50">
-                                            <td class="py-1 pe-2 font-medium text-gray-700" x-text="row.key"></td>
+                                            <td class="py-1 pe-2 font-medium text-gray-700" x-text="translateAttribute(row.key)" :title="row.key"></td>
                                             <td x-show="hasOld" class="py-1 pe-2 text-red-600" x-text="row.old"></td>
                                             <td x-show="hasNew" class="py-1 text-green-600" x-text="row.new"></td>
                                         </tr>
@@ -173,7 +173,7 @@
                         <template x-teleport="body">
                             <div x-show="open" x-transition @click.outside="open = false"
                                  :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                                 class="fixed z-[9999] w-160 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                                 class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
                                 <div class="flex items-center justify-between gap-2 mb-2">
                                     <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.current_attributes') }}</div>
                                     <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 5">
@@ -211,7 +211,7 @@
                                         <tbody>
                                             <template x-for="key in filteredKeys" :key="key">
                                                 <tr class="border-b border-gray-50">
-                                                    <td class="py-1 pe-2 font-medium text-gray-700" x-text="key"></td>
+                                                    <td class="py-1 pe-2 font-medium text-gray-700" x-text="translateAttribute(key)" :title="key"></td>
                                                     <td class="py-1 text-gray-600" x-text="typeof attrs[key] === 'object' && attrs[key] !== null ? JSON.stringify(attrs[key]).substring(0, 30) : String(attrs[key] ?? '').substring(0, 30)"></td>
                                                 </tr>
                                             </template>
@@ -292,7 +292,7 @@
                     <template x-teleport="body">
                         <div x-show="open" x-transition @click.outside="open = false"
                              :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                             class="fixed z-[9999] w-160 max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                             class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
                             <div class="flex items-center justify-between gap-2 mb-2">
                                 <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.causer_attributes') }}</div>
                                 <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 5">
@@ -330,7 +330,7 @@
                                     <tbody>
                                         <template x-for="key in filteredKeys" :key="key">
                                             <tr class="border-b border-gray-50">
-                                                <td class="py-1 pe-2 font-medium text-gray-700" x-text="key"></td>
+                                                <td class="py-1 pe-2 font-medium text-gray-700" x-text="translateAttribute(key)" :title="key"></td>
                                                 <td class="py-1 text-gray-600" x-text="typeof attrs[key] === 'object' && attrs[key] !== null ? JSON.stringify(attrs[key]).substring(0, 30) : String(attrs[key] ?? '').substring(0, 30)"></td>
                                             </tr>
                                         </template>

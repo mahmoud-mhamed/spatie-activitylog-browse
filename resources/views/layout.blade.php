@@ -6,6 +6,14 @@
     <title>@yield('title', __('activitylog-browse::messages.activity_log'))</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <script>
+        var __attrTranslations = @json(is_array(__('validation.attributes')) ? __('validation.attributes') : []);
+        function translateAttribute(key) {
+            if (__attrTranslations[key]) return __attrTranslations[key] + ' (' + key + ')';
+            var headline = key.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+            return headline !== key ? headline + ' (' + key + ')' : key;
+        }
+    </script>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
     <div class="w-full px-4 sm:px-6 lg:px-8 py-8">

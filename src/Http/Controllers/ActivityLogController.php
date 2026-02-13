@@ -61,11 +61,24 @@ class ActivityLogController extends Controller
         }
 
         if ($request->filled('changed_attribute')) {
-            $attr = preg_replace('/[^a-zA-Z0-9_.\-]/', '', $request->input('changed_attribute'));
-            if ($attr) {
+            $attrs = array_filter(array_map(
+                fn ($v) => preg_replace('/[^a-zA-Z0-9_.\-]/', '', trim($v)),
+                explode(',', $request->input('changed_attribute'))
+            ));
+            if (count($attrs) === 1) {
+                $attr = $attrs[0];
                 $query->where(function ($q) use ($attr) {
                     $q->whereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.attributes.' . $attr])
                       ->orWhereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.old.' . $attr]);
+                });
+            } elseif (count($attrs) > 1) {
+                $query->where(function ($q) use ($attrs) {
+                    foreach ($attrs as $attr) {
+                        $q->where(function ($sub) use ($attr) {
+                            $sub->whereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.attributes.' . $attr])
+                                ->orWhereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.old.' . $attr]);
+                        });
+                    }
                 });
             }
         }
@@ -93,205 +106,266 @@ class ActivityLogController extends Controller
     {
         $this->authorize();
 
+        $section = $request->input('section', 'overview');
+        $dateFrom = $request->filled('date_from') && strtotime($request->input('date_from')) ? $request->input('date_from') : null;
+        $dateTo = $request->filled('date_to') && strtotime($request->input('date_to')) ? $request->input('date_to') : null;
+
+        $cacheKey = "activitylog-browse:stats:{$section}" . ($dateFrom ? ':f' . $dateFrom : '') . ($dateTo ? ':t' . $dateTo : '');
+        $cacheTtl = ($dateFrom || $dateTo) ? 60 : 120;
+
+        return response()->json(Cache::remember($cacheKey, $cacheTtl, function () use ($section, $dateFrom, $dateTo) {
+            $activityModel = ActivitylogServiceProvider::determineActivityModel();
+
+            $scoped = function () use ($activityModel, $dateFrom, $dateTo) {
+                $q = $activityModel::query();
+                if ($dateFrom) {
+                    $q->where('created_at', '>=', $dateFrom . ' 00:00:00');
+                }
+                if ($dateTo) {
+                    $q->where('created_at', '<=', $dateTo . ' 23:59:59');
+                }
+                return $q;
+            };
+
+            return match ($section) {
+                'overview' => $this->statsOverview($scoped, $dateFrom, $dateTo),
+                'events' => $this->statsEvents($scoped),
+                'log_names' => $this->statsLogNames($scoped),
+                'models' => $this->statsModels($scoped),
+                'causers' => $this->statsCausers($scoped),
+                'daily' => $this->statsDaily($scoped, $dateFrom || $dateTo),
+                'hourly' => $this->statsHourly($scoped),
+                'weekday' => $this->statsWeekday($scoped),
+                'system_user' => $this->statsSystemUser($scoped),
+                'batches' => $this->statsBatches($scoped),
+                'attributes' => $this->statsAttributes($scoped),
+                'monthly' => $this->statsMonthly($scoped),
+                'peak_day' => $this->statsPeakDay($scoped),
+                default => [],
+            };
+        }));
+    }
+
+    private function statsOverview(\Closure $scoped, ?string $dateFrom, ?string $dateTo): array
+    {
         $table = config('activitylog.table_name', 'activity_log');
         $connection = config('activitylog.database_connection', config('database.default'));
 
-        $dateFrom = $request->filled('date_from') && strtotime($request->input('date_from')) ? $request->input('date_from') : null;
-        $dateTo = $request->filled('date_to') && strtotime($request->input('date_to')) ? $request->input('date_to') : null;
-        $hasDateFilter = $dateFrom || $dateTo;
+        $totalRows = $scoped()->count();
 
-        $cacheKey = 'activitylog-browse:stats' . ($dateFrom ? ':from-' . $dateFrom : '') . ($dateTo ? ':to-' . $dateTo : '');
+        $tableSize = null;
+        try {
+            $dbName = DB::connection($connection)->getDatabaseName();
+            $result = DB::connection($connection)
+                ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
+            $tableSize = $result?->size ? (int) $result->size : null;
+        } catch (\Throwable) {
+        }
 
-        return response()->json(Cache::remember($cacheKey, $hasDateFilter ? 60 : 120, function () use ($table, $connection, $dateFrom, $dateTo) {
-            $activityModel = ActivitylogServiceProvider::determineActivityModel();
+        $oldestEntry = $scoped()->orderBy('created_at')->value('created_at');
+        $newestEntry = $scoped()->orderByDesc('created_at')->value('created_at');
 
-            $dateScope = function ($query) use ($dateFrom, $dateTo) {
-                if ($dateFrom) {
-                    $query->whereDate('created_at', '>=', $dateFrom);
-                }
-                if ($dateTo) {
-                    $query->whereDate('created_at', '<=', $dateTo);
-                }
-                return $query;
-            };
+        $avgPerDay = $totalRows > 0 && $oldestEntry && $newestEntry
+            ? round($totalRows / max(1, $newestEntry->diffInDays($oldestEntry) ?: 1), 1)
+            : 0;
 
-            $totalRows = $dateScope($activityModel::query())->count();
+        return [
+            'total_rows' => $totalRows,
+            'table_size' => $tableSize,
+            'oldest_entry' => $oldestEntry?->toIso8601String(),
+            'newest_entry' => $newestEntry?->toIso8601String(),
+            'avg_per_day' => $avgPerDay,
+        ];
+    }
 
-            // Table size (MySQL/MariaDB)
-            $tableSize = null;
-            try {
-                $dbName = DB::connection($connection)->getDatabaseName();
-                $result = DB::connection($connection)
-                    ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
-                $tableSize = $result?->size ? (int) $result->size : null;
-            } catch (\Throwable) {
-                // Not MySQL or no access to information_schema
-            }
-
-            $oldestEntry = $dateScope($activityModel::query())->orderBy('id')->value('created_at');
-            $newestEntry = $dateScope($activityModel::query())->orderByDesc('id')->value('created_at');
-
-            // Events breakdown
-            $eventCounts = $dateScope($activityModel::select('event', DB::raw('COUNT(*) as count'))
-                ->whereNotNull('event'))
+    private function statsEvents(\Closure $scoped): array
+    {
+        return [
+            'event_counts' => $scoped()->select('event', DB::raw('COUNT(*) as count'))
+                ->whereNotNull('event')
                 ->groupBy('event')
                 ->orderByDesc('count')
                 ->get()
-                ->map(fn ($row) => ['event' => $row->event, 'count' => $row->count]);
+                ->map(fn ($row) => ['event' => $row->event, 'count' => $row->count]),
+        ];
+    }
 
-            // Log names breakdown
-            $logNameCounts = $dateScope($activityModel::select('log_name', DB::raw('COUNT(*) as count'))
-                ->whereNotNull('log_name'))
+    private function statsLogNames(\Closure $scoped): array
+    {
+        return [
+            'log_name_counts' => $scoped()->select('log_name', DB::raw('COUNT(*) as count'))
+                ->whereNotNull('log_name')
                 ->groupBy('log_name')
                 ->orderByDesc('count')
                 ->get()
-                ->map(fn ($row) => ['log_name' => $row->log_name, 'count' => $row->count]);
+                ->map(fn ($row) => ['log_name' => $row->log_name, 'count' => $row->count]),
+        ];
+    }
 
-            // Top subject types
-            $subjectTypeCounts = $dateScope($activityModel::select('subject_type', DB::raw('COUNT(*) as count'))
-                ->whereNotNull('subject_type'))
+    private function statsModels(\Closure $scoped): array
+    {
+        return [
+            'subject_type_counts' => $scoped()->select('subject_type', DB::raw('COUNT(*) as count'))
+                ->whereNotNull('subject_type')
                 ->groupBy('subject_type')
                 ->orderByDesc('count')
                 ->limit(10)
                 ->get()
-                ->map(fn ($row) => ['subject_type' => class_basename($row->subject_type), 'count' => $row->count]);
+                ->map(fn ($row) => ['subject_type' => class_basename($row->subject_type), 'count' => $row->count]),
+        ];
+    }
 
-            // Top causers
-            $topCausers = $dateScope($activityModel::select('causer_type', 'causer_id', DB::raw('COUNT(*) as count'))
-                ->whereNotNull('causer_type')
-                ->whereNotNull('causer_id'))
-                ->groupBy('causer_type', 'causer_id')
-                ->orderByDesc('count')
-                ->limit(10)
-                ->get()
-                ->map(function ($row) {
-                    $label = class_basename($row->causer_type) . ' #' . $row->causer_id;
-                    try {
-                        $causerClass = \Illuminate\Database\Eloquent\Relations\Relation::getMorphedModel($row->causer_type) ?? $row->causer_type;
-                        if (class_exists($causerClass)) {
-                            $model = $causerClass::find($row->causer_id);
-                            if ($model) {
-                                $name = $model->name ?? $model->email ?? $model->title ?? null;
-                                if ($name) {
-                                    $label = $name . ' (' . class_basename($row->causer_type) . ')';
-                                }
-                            }
+    private function statsCausers(\Closure $scoped): array
+    {
+        $topCausersRaw = $scoped()->select('causer_type', 'causer_id', DB::raw('COUNT(*) as count'))
+            ->whereNotNull('causer_type')
+            ->whereNotNull('causer_id')
+            ->groupBy('causer_type', 'causer_id')
+            ->orderByDesc('count')
+            ->limit(10)
+            ->get();
+
+        $causerNames = [];
+        foreach ($topCausersRaw->groupBy('causer_type') as $type => $rows) {
+            try {
+                $causerClass = \Illuminate\Database\Eloquent\Relations\Relation::getMorphedModel($type) ?? $type;
+                if (class_exists($causerClass)) {
+                    $ids = $rows->pluck('causer_id')->all();
+                    $models = $causerClass::whereIn((new $causerClass)->getKeyName(), $ids)->get()->keyBy(fn ($m) => $m->getKey());
+                    foreach ($models as $id => $model) {
+                        $name = $model->name ?? $model->email ?? $model->title ?? null;
+                        if ($name) {
+                            $causerNames[$type . ':' . $id] = $name . ' (' . class_basename($type) . ')';
                         }
-                    } catch (\Throwable) {}
-
-                    return ['causer' => $label, 'count' => $row->count];
-                });
-
-            // Activity per day (last 30 days or within date range)
-            $dailyQuery = $activityModel::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'));
-            if (! $dateFrom && ! $dateTo) {
-                $dailyQuery->where('created_at', '>=', now()->subDays(30));
+                    }
+                }
+            } catch (\Throwable) {
             }
-            $dailyActivity = $dateScope($dailyQuery)
-                ->groupBy(DB::raw('DATE(created_at)'))
-                ->orderBy('date')
-                ->get()
-                ->map(fn ($row) => ['date' => $row->date, 'count' => $row->count]);
+        }
 
-            // Average per day
-            $avgPerDay = $totalRows > 0 && $oldestEntry
-                ? round($totalRows / max(1, ($newestEntry ?? now())->diffInDays($oldestEntry) ?: 1), 1)
-                : 0;
+        return [
+            'top_causers' => $topCausersRaw->map(function ($row) use ($causerNames) {
+                $key = $row->causer_type . ':' . $row->causer_id;
+                return ['causer' => $causerNames[$key] ?? class_basename($row->causer_type) . ' #' . $row->causer_id, 'count' => $row->count];
+            }),
+        ];
+    }
 
-            // Activity by hour of day
-            $hourlyActivity = $dateScope($activityModel::select(DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as count')))
+    private function statsDaily(\Closure $scoped, bool $hasDateFilter): array
+    {
+        $q = $scoped()->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'));
+        if (! $hasDateFilter) {
+            $q->where('created_at', '>=', now()->subDays(30));
+        }
+
+        return [
+            'daily_activity' => $q->groupBy(DB::raw('DATE(created_at)'))->orderBy('date')->limit(90)->get()
+                ->map(fn ($row) => ['date' => $row->date, 'count' => $row->count]),
+        ];
+    }
+
+    private function statsHourly(\Closure $scoped): array
+    {
+        return [
+            'hourly_activity' => $scoped()->select(DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as count'))
                 ->groupBy(DB::raw('HOUR(created_at)'))
                 ->orderBy('hour')
                 ->get()
-                ->map(fn ($row) => ['hour' => (int) $row->hour, 'count' => $row->count]);
+                ->map(fn ($row) => ['hour' => (int) $row->hour, 'count' => $row->count]),
+        ];
+    }
 
-            // Activity by day of week (1=Sunday ... 7=Saturday in MySQL DAYOFWEEK)
-            $weekdayActivity = $dateScope($activityModel::select(DB::raw('DAYOFWEEK(created_at) as dow'), DB::raw('COUNT(*) as count')))
+    private function statsWeekday(\Closure $scoped): array
+    {
+        return [
+            'weekday_activity' => $scoped()->select(DB::raw('DAYOFWEEK(created_at) as dow'), DB::raw('COUNT(*) as count'))
                 ->groupBy(DB::raw('DAYOFWEEK(created_at)'))
                 ->orderBy('dow')
                 ->get()
-                ->map(fn ($row) => ['dow' => (int) $row->dow, 'count' => $row->count]);
+                ->map(fn ($row) => ['dow' => (int) $row->dow, 'count' => $row->count]),
+        ];
+    }
 
-            // System vs User actions
-            $userActions = $dateScope($activityModel::whereNotNull('causer_id'))->count();
-            $systemActions = $totalRows - $userActions;
+    private function statsSystemUser(\Closure $scoped): array
+    {
+        $total = $scoped()->count();
+        $userActions = $scoped()->whereNotNull('causer_id')->count();
 
-            // Batch operations
-            $batchCount = $dateScope($activityModel::whereNotNull('batch_uuid'))
-                ->distinct('batch_uuid')
-                ->count('batch_uuid');
-            $batchedEntries = $dateScope($activityModel::whereNotNull('batch_uuid'))->count();
+        return ['user_actions' => $userActions, 'system_actions' => $total - $userActions];
+    }
 
-            // Most changed attributes (from properties->attributes and properties->old)
-            $topAttributes = collect();
-            try {
-                $recentProps = $dateScope($activityModel::whereNotNull('properties')
-                    ->where('event', 'updated'))
-                    ->orderByDesc('id')
-                    ->limit(500)
-                    ->pluck('properties');
+    private function statsBatches(\Closure $scoped): array
+    {
+        $batchedEntries = $scoped()->whereNotNull('batch_uuid')->count();
 
-                $attrCounts = [];
-                foreach ($recentProps as $props) {
-                    $p = $props instanceof \Illuminate\Support\Collection ? $props->toArray() : (array) $props;
-                    $keys = array_unique(array_merge(
-                        array_keys($p['attributes'] ?? []),
-                        array_keys($p['old'] ?? [])
-                    ));
-                    foreach ($keys as $k) {
-                        $attrCounts[$k] = ($attrCounts[$k] ?? 0) + 1;
-                    }
+        return [
+            'batch_count' => $batchedEntries > 0 ? $scoped()->whereNotNull('batch_uuid')->distinct()->count('batch_uuid') : 0,
+            'batched_entries' => $batchedEntries,
+        ];
+    }
+
+    private function statsAttributes(\Closure $scoped): array
+    {
+        $topAttributes = collect();
+        try {
+            $recentProps = $scoped()->whereNotNull('properties')
+                ->where('event', 'updated')
+                ->orderByDesc('id')
+                ->limit(200)
+                ->pluck('properties');
+
+            $attrCounts = [];
+            foreach ($recentProps as $props) {
+                $p = $props instanceof \Illuminate\Support\Collection ? $props->toArray() : (array) $props;
+                foreach (array_keys($p['attributes'] ?? []) as $k) {
+                    $attrCounts[$k] = ($attrCounts[$k] ?? 0) + 1;
                 }
-                arsort($attrCounts);
-                $topAttributes = collect(array_slice($attrCounts, 0, 10, true))
-                    ->map(fn ($count, $attr) => ['attribute' => $attr, 'count' => $count])
-                    ->values();
-            } catch (\Throwable) {}
+                foreach (array_keys($p['old'] ?? []) as $k) {
+                    $attrCounts[$k] = ($attrCounts[$k] ?? 0) + 1;
+                }
+            }
+            arsort($attrCounts);
+            $topAttributes = collect(array_slice($attrCounts, 0, 10, true))
+                ->map(fn ($count, $attr) => ['attribute' => $attr, 'count' => $count])
+                ->values();
+        } catch (\Throwable) {
+        }
 
-            // Monthly activity
-            $monthlyActivity = $dateScope($activityModel::select(
-                    DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
-                    DB::raw('COUNT(*) as count')
-                ))
-                ->groupBy(DB::raw("DATE_FORMAT(created_at, '%Y-%m')"))
-                ->orderBy('month')
-                ->get()
-                ->map(fn ($row) => ['month' => $row->month, 'count' => $row->count]);
+        return ['top_attributes' => $topAttributes];
+    }
 
-            // Peak period detection (busiest single day)
-            $peakDay = $dateScope($activityModel::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count')))
-                ->groupBy(DB::raw('DATE(created_at)'))
-                ->orderByDesc('count')
-                ->first();
+    private function statsMonthly(\Closure $scoped): array
+    {
+        $monthlyActivity = $scoped()->select(
+                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
+                DB::raw('COUNT(*) as count')
+            )
+            ->groupBy(DB::raw("DATE_FORMAT(created_at, '%Y-%m')"))
+            ->orderBy('month')
+            ->get()
+            ->map(fn ($row) => ['month' => $row->month, 'count' => $row->count]);
 
-            // Busiest month
-            $peakMonth = $monthlyActivity->sortByDesc('count')->first();
+        $peakMonth = $monthlyActivity->sortByDesc('count')->first();
 
-            return [
-                'total_rows' => $totalRows,
-                'table_size' => $tableSize,
-                'oldest_entry' => $oldestEntry?->toIso8601String(),
-                'newest_entry' => $newestEntry?->toIso8601String(),
-                'event_counts' => $eventCounts,
-                'log_name_counts' => $logNameCounts,
-                'subject_type_counts' => $subjectTypeCounts,
-                'top_causers' => $topCausers,
-                'daily_activity' => $dailyActivity,
-                'avg_per_day' => $avgPerDay,
-                'hourly_activity' => $hourlyActivity,
-                'weekday_activity' => $weekdayActivity,
-                'user_actions' => $userActions,
-                'system_actions' => $systemActions,
-                'batch_count' => $batchCount,
-                'batched_entries' => $batchedEntries,
-                'top_attributes' => $topAttributes,
-                'monthly_activity' => $monthlyActivity,
-                'peak_day_date' => $peakDay?->date,
-                'peak_day_count' => $peakDay?->count,
-                'peak_month' => $peakMonth['month'] ?? null,
-                'peak_month_count' => $peakMonth['count'] ?? null,
-            ];
-        }));
+        return [
+            'monthly_activity' => $monthlyActivity,
+            'peak_month' => $peakMonth['month'] ?? null,
+            'peak_month_count' => $peakMonth['count'] ?? null,
+        ];
+    }
+
+    private function statsPeakDay(\Closure $scoped): array
+    {
+        $peakDay = $scoped()->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderByDesc('count')
+            ->limit(1)
+            ->first();
+
+        return [
+            'peak_day_date' => $peakDay?->date,
+            'peak_day_count' => $peakDay?->count,
+        ];
     }
 
     public function filterOptions(Request $request)

@@ -44,14 +44,100 @@
                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
         </div>
 
-        <div id="changed_attribute_wrapper" style="{{ request('subject_type') ? '' : 'display:none' }}">
-            @include('activitylog-browse::partials.searchable-select', [
-                'name' => 'changed_attribute',
-                'label' => __('activitylog-browse::messages.changed_attribute'),
-                'allLabel' => __('activitylog-browse::messages.all'),
-                'selected' => request('changed_attribute', ''),
-                'options' => [],
-            ])
+        <div id="changed_attribute_wrapper" style="{{ request('subject_type') ? '' : 'display:none' }}"
+             x-data="{
+                open: false,
+                search: '',
+                options: [],
+                selected: @js(array_filter(explode(',', request('changed_attribute', '')))),
+                allLabel: @js(__('activitylog-browse::messages.all')),
+                get filtered() {
+                    if (!this.search) return this.options;
+                    let s = this.search.toLowerCase();
+                    return this.options.filter(o => o.label.toLowerCase().includes(s));
+                },
+                get displayLabel() {
+                    if (this.selected.length === 0) return this.allLabel;
+                    return this.selected.join(', ');
+                },
+                isSelected(val) {
+                    return this.selected.includes(val);
+                },
+                toggle(val) {
+                    let idx = this.selected.indexOf(val);
+                    if (idx === -1) {
+                        this.selected.push(val);
+                    } else {
+                        this.selected.splice(idx, 1);
+                    }
+                    this.syncHidden();
+                },
+                clearAll() {
+                    this.selected = [];
+                    this.search = '';
+                    this.open = false;
+                    this.syncHidden();
+                },
+                syncHidden() {
+                    this.$refs.hidden.value = this.selected.join(',');
+                },
+                setOptions(opts) {
+                    this.options = opts;
+                }
+             }"
+             @click.outside="open = false; search = ''">
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.changed_attribute') }}</label>
+            <input type="hidden" name="changed_attribute" x-ref="hidden" :value="selected.join(',')">
+            <button type="button" @click="open = !open; if (open) $nextTick(() => $refs.attrSearch.focus())"
+                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500 bg-white text-start flex items-center justify-between gap-2">
+                <span class="truncate" :class="selected.length ? 'text-gray-900' : 'text-gray-500'">
+                    <template x-if="selected.length === 0">
+                        <span x-text="allLabel"></span>
+                    </template>
+                    <template x-if="selected.length > 0">
+                        <span class="flex flex-wrap gap-1">
+                            <template x-for="s in selected" :key="s">
+                                <span class="inline-flex items-center gap-0.5 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded">
+                                    <span x-text="s"></span>
+                                    <button type="button" @click.stop="toggle(s)" class="hover:text-blue-600">&times;</button>
+                                </span>
+                            </template>
+                        </span>
+                    </template>
+                </span>
+                <svg class="h-4 w-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+            </button>
+            <div x-show="open" x-transition.opacity.duration.150ms
+                 class="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-lg">
+                <div class="p-2">
+                    <input x-ref="attrSearch" type="text" x-model="search"
+                           placeholder="{{ __('activitylog-browse::messages.search') }}..."
+                           class="w-full rounded-md border-gray-300 shadow-sm text-sm px-2 py-1.5 border focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <ul class="max-h-48 overflow-y-auto py-1">
+                    <li @click="clearAll()"
+                        class="px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50"
+                        :class="selected.length === 0 ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-500'">
+                        <span x-text="allLabel"></span>
+                    </li>
+                    <template x-for="opt in filtered" :key="opt.value">
+                        <li @click="toggle(opt.value)"
+                            class="px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50 flex items-center gap-2"
+                            :class="isSelected(opt.value) ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'">
+                            <svg x-show="isSelected(opt.value)" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-blue-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                            </svg>
+                            <span x-show="!isSelected(opt.value)" class="w-3.5 shrink-0"></span>
+                            <span x-text="opt.label"></span>
+                        </li>
+                    </template>
+                    <li x-show="filtered.length === 0 && search" class="px-3 py-1.5 text-sm text-gray-400 italic">
+                        {{ __('activitylog-browse::messages.no_data') }}
+                    </li>
+                </ul>
+            </div>
         </div>
 
         @include('activitylog-browse::partials.searchable-select', [
@@ -205,12 +291,16 @@
         loading: false,
         info: null,
         search: '',
+        selectedAttrs: @js(array_filter(explode(',', request('changed_attribute', '')))),
         formatSize(bytes) {
             if (!bytes) return '-';
             const units = ['B', 'KB', 'MB', 'GB'];
             let i = 0, size = bytes;
             for (; size >= 1024 && i < units.length - 1; i++) size /= 1024;
             return size.toFixed(1) + ' ' + units[i];
+        },
+        isAttrSelected(key) {
+            return this.selectedAttrs.includes(key);
         },
         get filteredAttrs() {
             if (!this.info) return [];
@@ -290,20 +380,18 @@
                 <div class="flex flex-wrap gap-2">
                     <template x-for="attr in filteredAttrs" :key="attr.key">
                         <button type="button"
-                                @click="
-                                    var form = document.getElementById('activitylog-browse-filters');
-                                    var hiddenInput = form.querySelector('input[name=changed_attribute]');
-                                    if (hiddenInput) {
-                                        hiddenInput.value = attr.key;
-                                    }
-                                    form.submit();
-                                "
-                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border cursor-pointer transition-colors hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
-                                :class="attr.has_translation ? 'bg-white border-gray-200 text-gray-700' : 'bg-white border-gray-200 text-gray-500'"
+                                @click="toggleAttribute(attr.key)"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border cursor-pointer transition-colors"
+                                :class="isAttrSelected(attr.key)
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'"
                                 :title="'{{ __('activitylog-browse::messages.click_to_filter') }}'">
+                            <svg x-show="isAttrSelected(attr.key)" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                            </svg>
                             <span class="font-medium" x-text="attr.label"></span>
-                            <span class="text-gray-400" x-show="attr.has_translation" x-text="'(' + attr.key + ')'"></span>
-                            <span x-show="!attr.has_translation" class="font-mono text-gray-400" x-text="attr.key === attr.label ? '' : attr.key"></span>
+                            <span class="opacity-70" x-show="attr.has_translation" x-text="'(' + attr.key + ')'"></span>
+                            <span x-show="!attr.has_translation" class="font-mono opacity-70" x-text="attr.key === attr.label ? '' : attr.key"></span>
                         </button>
                     </template>
                     <template x-if="filteredAttrs.length === 0 && search">
@@ -316,10 +404,27 @@
 </div>
 
 <script>
+    function toggleAttribute(key) {
+        var params = new URLSearchParams(window.location.search);
+        var current = params.get('changed_attribute');
+        var list = current ? current.split(',').filter(Boolean) : [];
+        var idx = list.indexOf(key);
+        if (idx === -1) {
+            list.push(key);
+        } else {
+            list.splice(idx, 1);
+        }
+        if (list.length > 0) {
+            params.set('changed_attribute', list.join(','));
+        } else {
+            params.delete('changed_attribute');
+        }
+        window.location.search = params.toString();
+    }
+
     var attributesUrl = '{{ route("activitylog-browse.attributes") }}';
     var modelInfoUrl = '{{ route("activitylog-browse.model-info") }}';
     var causersUrl = '{{ route("activitylog-browse.causers") }}';
-    var savedAttribute = '{{ request("changed_attribute") }}';
     var allLabel = '{{ __("activitylog-browse::messages.all") }}';
 
     function fetchModelInfo(subjectType) {
@@ -351,15 +456,12 @@
 
     function fetchAttributes(subjectType) {
         var wrapper = document.getElementById('changed_attribute_wrapper');
-        var attrEl = document.querySelector('#changed_attribute_wrapper [x-data]');
 
         if (!subjectType) {
             wrapper.style.display = 'none';
-            if (attrEl) {
-                var d = Alpine.$data(attrEl);
-                d.options = [];
-                d.pick('', allLabel);
-            }
+            var d = Alpine.$data(wrapper);
+            d.options = [];
+            d.selected = [];
             return;
         }
 
@@ -368,15 +470,8 @@
         fetch(attributesUrl + '?subject_type=' + encodeURIComponent(subjectType))
             .then(function(r) { return r.json(); })
             .then(function(attrs) {
-                if (!attrEl) return;
-                var d = Alpine.$data(attrEl);
-                d.options = attrs.map(function(a) { return { value: a, label: a }; });
-                if (savedAttribute) {
-                    d.pick(savedAttribute, savedAttribute);
-                    savedAttribute = '';
-                } else {
-                    d.pick('', allLabel);
-                }
+                var d = Alpine.$data(wrapper);
+                d.options = attrs.map(function(a) { return { value: a, label: translateAttribute(a) }; });
             });
     }
 

@@ -84,7 +84,7 @@
         </button>
 
         <div x-show="open" x-transition.opacity.duration.150ms
-             class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg">
+             class="absolute z-50 mt-1 w-196 bg-white border border-gray-200 rounded-md shadow-lg">
             <div class="p-2">
                 <input x-ref="searchInput" type="text" x-model="search"
                        placeholder="{{ __('activitylog-browse::messages.search') }}..."
