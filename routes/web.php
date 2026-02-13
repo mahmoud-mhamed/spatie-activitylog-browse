@@ -11,6 +11,7 @@ Route::middleware(array_merge($middleware, [SetLocale::class]))
     ->prefix($prefix)
     ->group(function () {
         Route::get('/', [ActivityLogController::class, 'index'])->name('activitylog-browse.index');
+        Route::get('/filter-options', [ActivityLogController::class, 'filterOptions'])->name('activitylog-browse.filter-options');
         Route::get('/attributes', [ActivityLogController::class, 'attributes'])->name('activitylog-browse.attributes');
         Route::get('/causers', [ActivityLogController::class, 'causers'])->name('activitylog-browse.causers');
         Route::get('/switch-lang/{locale}', [ActivityLogController::class, 'switchLang'])->name('activitylog-browse.switch-lang');

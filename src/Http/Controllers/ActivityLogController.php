@@ -68,18 +68,38 @@ class ActivityLogController extends Controller
             config('activitylog-browse.browse.per_page', 25)
         )->withQueryString();
 
-        $logNames = Cache::remember('activitylog-browse:log_names', 60, fn () => $activityModel::distinct()->pluck('log_name')->sort()->values());
-        $events = Cache::remember('activitylog-browse:events', 60, fn () => $activityModel::distinct()->whereNotNull('event')->pluck('event')->sort()->values());
-        $subjectTypes = Cache::remember('activitylog-browse:subject_types', 60, fn () => $activityModel::distinct()->whereNotNull('subject_type')->pluck('subject_type')->sort()->values());
-        $causerTypes = Cache::remember('activitylog-browse:causer_types', 60, fn () => $activityModel::distinct()->whereNotNull('causer_type')->pluck('causer_type')->sort()->values());
+        return view('activitylog-browse::index', compact('activities'));
+    }
 
-        return view('activitylog-browse::index', compact(
-            'activities',
-            'logNames',
-            'events',
-            'subjectTypes',
-            'causerTypes',
-        ));
+    public function filterOptions(Request $request)
+    {
+        $this->authorize();
+
+        $column = $request->input('column');
+        $allowed = ['log_name', 'event', 'subject_type', 'causer_type'];
+
+        if (! in_array($column, $allowed)) {
+            return response()->json([]);
+        }
+
+        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+
+        $values = Cache::remember("activitylog-browse:{$column}", 60, function () use ($activityModel, $column) {
+            return $activityModel::distinct()
+                ->whereNotNull($column)
+                ->pluck($column)
+                ->sort()
+                ->values();
+        });
+
+        $useBasename = in_array($column, ['subject_type', 'causer_type']);
+
+        $options = $values->map(fn ($v) => [
+            'value' => $v,
+            'label' => $useBasename ? class_basename($v) : $v,
+        ])->values();
+
+        return response()->json($options);
     }
 
     public function attributes(Request $request)

@@ -1,7 +1,14 @@
-@props(['name', 'label', 'allLabel', 'selected' => '', 'options' => []])
+@props(['name', 'label', 'allLabel', 'selected' => '', 'options' => [], 'fetchUrl' => ''])
 
 @php
     $selectedLabel = $allLabel;
+    if ($selected !== '') {
+        // For fetchUrl mode with no options yet, show a sensible default
+        $selectedLabel = $selected;
+        if (str_contains($selected, '\\')) {
+            $selectedLabel = class_basename($selected);
+        }
+    }
     foreach ($options as $opt) {
         if ((string) $opt['value'] === (string) $selected) {
             $selectedLabel = $opt['label'];
@@ -19,10 +26,38 @@
             displayLabel: @js($selectedLabel),
             allLabel: @js($allLabel),
             options: @js($options),
+            fetchUrl: @js($fetchUrl),
+            loaded: @js(empty($fetchUrl)),
+            loading: false,
+            init() {
+                if (this.fetchUrl && this.value) this.fetchOptions();
+            },
             get filtered() {
                 if (!this.search) return this.options;
                 let s = this.search.toLowerCase();
                 return this.options.filter(o => o.label.toLowerCase().includes(s));
+            },
+            toggle() {
+                this.open = !this.open;
+                if (this.open) {
+                    if (!this.loaded && this.fetchUrl) this.fetchOptions();
+                    this.$nextTick(() => this.$refs.searchInput.focus());
+                }
+            },
+            fetchOptions() {
+                this.loading = true;
+                fetch(this.fetchUrl)
+                    .then(r => r.json())
+                    .then(data => {
+                        this.options = data;
+                        this.loaded = true;
+                        this.loading = false;
+                        if (this.value) {
+                            var match = data.find(o => o.value === this.value);
+                            if (match) this.displayLabel = match.label;
+                        }
+                    })
+                    .catch(() => { this.loading = false; });
             },
             pick(val, label) {
                 this.value = val;
@@ -40,7 +75,7 @@
         <input type="hidden" name="{{ $name }}" x-ref="hidden" :value="value">
 
         <button type="button"
-                @click="open = !open; $nextTick(() => { if(open) $refs.searchInput.focus() })"
+                @click="toggle()"
                 class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500 bg-white text-start flex items-center justify-between">
             <span x-text="displayLabel" class="truncate" :class="value ? 'text-gray-900' : 'text-gray-500'"></span>
             <svg class="h-4 w-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -56,7 +91,10 @@
                        @keydown.enter.prevent="if(filtered.length === 1) pick(filtered[0].value, filtered[0].label)"
                        class="w-full rounded-md border-gray-300 shadow-sm text-sm px-2 py-1.5 border focus:border-blue-500 focus:ring-blue-500">
             </div>
-            <ul class="max-h-48 overflow-y-auto py-1">
+            <div x-show="loading" class="px-3 py-2 text-sm text-gray-400 italic">
+                {{ __('activitylog-browse::messages.loading') }}...
+            </div>
+            <ul x-show="!loading" class="max-h-48 overflow-y-auto py-1">
                 <li @click="pick('', allLabel)"
                     class="px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50"
                     :class="!value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-500'">
@@ -69,7 +107,7 @@
                         <span x-text="opt.label"></span>
                     </li>
                 </template>
-                <li x-show="filtered.length === 0 && search" class="px-3 py-1.5 text-sm text-gray-400 italic">
+                <li x-show="loaded && filtered.length === 0 && search" class="px-3 py-1.5 text-sm text-gray-400 italic">
                     {{ __('activitylog-browse::messages.no_data') }}
                 </li>
             </ul>

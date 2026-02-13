@@ -292,14 +292,20 @@
 
     {{-- Related Models --}}
     @if($activity->subject && count($relations) > 0)
-        <div class="bg-white rounded-lg shadow mb-6">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-900">{{ __('activitylog-browse::messages.related_models') }}</h2>
+        <div class="bg-white rounded-lg shadow mb-6" x-data="{ search: '' }">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
+                <h2 class="text-lg font-semibold text-gray-900 shrink-0">{{ __('activitylog-browse::messages.related_models') }}</h2>
+                @if(count($relations) > 5)
+                    <input type="text" x-model="search"
+                           placeholder="{{ __('activitylog-browse::messages.search') }}..."
+                           class="rounded-md border-gray-300 shadow-sm text-sm px-3 py-1.5 border focus:border-blue-500 focus:ring-blue-500 w-full max-w-xs">
+                @endif
             </div>
             <div class="px-6 py-4">
                 <div class="flex flex-wrap gap-2">
                     @foreach($relations as $rel)
                         <a href="{{ route('activitylog-browse.related-logs', [$activity->id, $rel]) }}"
+                           x-show="!search || '{{ strtolower(Str::headline($rel)) }}'.includes(search.toLowerCase())"
                            class="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 me-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
