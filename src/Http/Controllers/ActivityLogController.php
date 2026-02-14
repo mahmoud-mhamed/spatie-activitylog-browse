@@ -725,6 +725,9 @@ class ActivityLogController extends Controller
             $query->whereIn('subject_type', $request->input('models'));
         }
 
+        // Only select records that still have extra keys beyond 'attributes' and 'old'
+        $query->whereRaw("JSON_LENGTH(JSON_REMOVE(JSON_REMOVE(properties, '$.attributes'), '$.old')) > 0");
+
         $remaining = (clone $query)->count();
         $ids = (clone $query)->limit($batchSize)->pluck('id');
 
