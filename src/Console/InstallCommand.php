@@ -61,8 +61,7 @@ class InstallCommand extends Command
             'activity_log_event_index' => ['event'],
         ];
 
-        $sm = Schema::getConnection()->getDoctrineSchemaManager();
-        $existing = collect($sm->listTableIndexes($table))->keys()->map(fn ($k) => strtolower($k));
+        $existing = collect(Schema::getIndexes($table))->pluck('name')->map(fn ($k) => strtolower($k));
 
         foreach ($indexes as $name => $columns) {
             if ($existing->contains(strtolower($name))) {

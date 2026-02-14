@@ -54,6 +54,9 @@
         stripTotal: 0,
         stripProcessed: 0,
         stripDone: false,
+        stripError: '',
+        stripAutoRetry: false,
+        stripRetryCount: 0,
 
         get filteredModels() {
             if (!this.modelSearch) return this.models;
@@ -130,9 +133,13 @@
 
         async startStrip() {
             this.stripping = true;
-            this.stripTotal = this.previewCount;
-            this.stripProcessed = 0;
+            if (!this.stripError) {
+                this.stripTotal = this.previewCount;
+                this.stripProcessed = 0;
+            }
             this.stripDone = false;
+            this.stripError = '';
+            this.stripRetryCount = 0;
 
             const params = new URLSearchParams();
             params.append('days', this.days);
@@ -146,8 +153,14 @@
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
                         body: params.toString()
                     });
+                    if (!res.ok) {
+                        const errorData = await res.json().catch(() => null);
+                        throw new Error(errorData?.message || `HTTP ${res.status}`);
+                    }
                     const data = await res.json();
                     this.stripProcessed += data.processed;
+                    this.stripRetryCount = 0;
+                    this.stripError = '';
 
                     if (data.done) {
                         this.stripDone = true;
@@ -156,6 +169,14 @@
                         break;
                     }
                 } catch (e) {
+                    this.stripError = e.message || '{{ __('activitylog-browse::messages.strip_error_unknown') }}';
+
+                    if (this.stripAutoRetry) {
+                        this.stripRetryCount++;
+                        await new Promise(r => setTimeout(r, Math.min(2000 * this.stripRetryCount, 10000)));
+                        continue;
+                    }
+
                     this.stripping = false;
                     break;
                 }
@@ -293,25 +314,63 @@
                     </form>
 
                     {{-- Strip Progress --}}
-                    <div x-show="stripping || stripDone" x-transition class="mt-4 rounded-lg border p-4"
-                         :class="stripDone ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'">
+                    <div x-show="stripping || stripDone || stripError" x-transition class="mt-4 rounded-lg border p-4"
+                         :class="stripDone ? 'border-green-200 bg-green-50' : (stripError && !stripping) ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'">
                         <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-medium" :class="stripDone ? 'text-green-800' : 'text-amber-800'"
+                            <span class="text-sm font-medium" :class="stripDone ? 'text-green-800' : (stripError && !stripping) ? 'text-red-800' : 'text-amber-800'"
                                   x-text="stripDone
                                       ? '{{ __('activitylog-browse::messages.strip_done', ['count' => '__COUNT__']) }}'.replace('__COUNT__', stripProcessed)
+                                      : (stripError && !stripping) ? '{{ __('activitylog-browse::messages.strip_progress') }} ({{ __('activitylog-browse::messages.strip_stopped') }})'
                                       : '{{ __('activitylog-browse::messages.strip_progress') }}'">
                             </span>
-                            <span class="text-xs" :class="stripDone ? 'text-green-600' : 'text-amber-600'"
+                            <span class="text-xs" :class="stripDone ? 'text-green-600' : (stripError && !stripping) ? 'text-red-600' : 'text-amber-600'"
                                   x-text="'{{ __('activitylog-browse::messages.strip_progress_count', ['processed' => '__PROCESSED__', 'total' => '__TOTAL__']) }}'.replace('__PROCESSED__', stripProcessed).replace('__TOTAL__', stripTotal)">
                             </span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                             <div class="h-3 rounded-full transition-all duration-300 ease-out"
-                                 :class="stripDone ? 'bg-green-500' : 'bg-amber-500'"
+                                 :class="stripDone ? 'bg-green-500' : (stripError && !stripping) ? 'bg-red-400' : 'bg-amber-500'"
                                  :style="'width: ' + stripPercent + '%'">
                             </div>
                         </div>
                         <div class="mt-1 text-xs text-gray-500 text-end" x-text="stripPercent + '%'"></div>
+
+                        {{-- Auto-Retry Toggle --}}
+                        <div x-show="!stripDone" class="mt-3 flex items-center gap-2">
+                            <button type="button" @click="stripAutoRetry = !stripAutoRetry; if (stripAutoRetry && stripError && !stripping) startStrip();"
+                                    class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1"
+                                    :class="stripAutoRetry ? 'bg-amber-500' : 'bg-gray-300'"
+                                    role="switch" :aria-checked="stripAutoRetry">
+                                <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                                      :class="stripAutoRetry ? 'ltr:translate-x-4 rtl:-translate-x-4' : 'translate-x-0'"></span>
+                            </button>
+                            <span class="text-xs text-gray-600">{{ __('activitylog-browse::messages.strip_auto_retry') }}</span>
+                        </div>
+
+                        {{-- Error Message & Continue Button --}}
+                        <div x-show="stripError" x-transition class="mt-3 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                            <div class="flex items-center gap-2 text-sm text-red-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span x-text="stripError"></span>
+                                <span x-show="stripping && stripAutoRetry" class="text-xs text-amber-600" x-text="'({{ __('activitylog-browse::messages.strip_retrying') }} #' + stripRetryCount + ')'"></span>
+                            </div>
+                            <button x-show="!stripping" type="button" @click="startStrip()"
+                                    class="inline-flex items-center gap-1 flex-shrink-0 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-600 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                {{ __('activitylog-browse::messages.strip_continue') }}
+                            </button>
+                            <span x-show="stripping && stripAutoRetry" class="flex-shrink-0">
+                                <svg class="animate-spin h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                            </span>
+                        </div>
                     </div>
 
                     {{-- Confirmation Modal --}}
