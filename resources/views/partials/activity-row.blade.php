@@ -39,7 +39,7 @@
                 @endphp
                 <div x-data="{
                     open: false,
-                    pos: { top: 0, left: 0 },
+                    pos: { top: 0, left: 0, above: true },
                     diffSearch: '',
                     hideEmpty: false,
                     rows: @js($diffRows),
@@ -63,7 +63,13 @@
                     <button @click="
                         let rect = $el.getBoundingClientRect();
                         let isRtl = document.documentElement.dir === 'rtl';
-                        pos = { top: rect.top + window.scrollY - 8, left: isRtl ? rect.right + window.scrollX : rect.left + window.scrollX - 320 };
+                        let popW = 640, popH = 384;
+                        let left = isRtl ? rect.right : rect.left - popW;
+                        if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+                        if (left < 8) left = 8;
+                        let above = rect.top - popH > 8;
+                        let top = above ? rect.top - 8 : rect.bottom + 8;
+                        pos = { top, left, above };
                         open = !open;
                     " type="button"
                             class="text-gray-400 mt-1 hover:text-gray-600 focus:outline-none">
@@ -77,7 +83,8 @@
                     <template x-teleport="body">
                         <div x-show="open" x-transition @click.outside="open = false"
                              :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                             class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                             :class="pos.above ? '-translate-y-full' : ''"
+                             class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3">
                             <div class="flex items-center justify-between gap-2 mb-2">
                                 <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.changes') }}</div>
                                 <div class="flex items-center gap-2">
@@ -130,7 +137,7 @@
                 @if($activity->subject_type)
                     <div x-data="{
                         open: false,
-                        pos: { top: 0, left: 0 },
+                        pos: { top: 0, left: 0, above: true },
                         loading: false,
                         attrs: null,
                         attrSearch: '',
@@ -152,7 +159,13 @@
                         <button @click="
                             let rect = $el.getBoundingClientRect();
                             let isRtl = document.documentElement.dir === 'rtl';
-                            pos = { top: rect.top + window.scrollY - 8, left: isRtl ? rect.right + window.scrollX : rect.left + window.scrollX - 320 };
+                            let popW = 640, popH = 384;
+                            let left = isRtl ? rect.right : rect.left - popW;
+                            if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+                            if (left < 8) left = 8;
+                            let above = rect.top - popH > 8;
+                            let top = above ? rect.top - 8 : rect.bottom + 8;
+                            pos = { top, left, above };
                             if (!open && attrs === null) {
                                 loading = true;
                                 fetch('{{ route('activitylog-browse.subject-attributes', $activity->id) }}')
@@ -173,7 +186,8 @@
                         <template x-teleport="body">
                             <div x-show="open" x-transition @click.outside="open = false"
                                  :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                                 class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                                 :class="pos.above ? '-translate-y-full' : ''"
+                                 class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3">
                                 <div class="flex items-center justify-between gap-2 mb-2">
                                     <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.current_attributes') }}</div>
                                     <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 5">
@@ -249,7 +263,7 @@
                 </div>
                 <div x-data="{
                     open: false,
-                    pos: { top: 0, left: 0 },
+                    pos: { top: 0, left: 0, above: true },
                     loading: false,
                     attrs: null,
                     attrSearch: '',
@@ -271,7 +285,13 @@
                     <button @click="
                         let rect = $el.getBoundingClientRect();
                         let isRtl = document.documentElement.dir === 'rtl';
-                        pos = { top: rect.top + window.scrollY - 8, left: isRtl ? rect.right + window.scrollX : rect.left + window.scrollX - 320 };
+                        let popW = 640, popH = 384;
+                        let left = isRtl ? rect.right : rect.left - popW;
+                        if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+                        if (left < 8) left = 8;
+                        let above = rect.top - popH > 8;
+                        let top = above ? rect.top - 8 : rect.bottom + 8;
+                        pos = { top, left, above };
                         if (!open && attrs === null) {
                             loading = true;
                             fetch('{{ route('activitylog-browse.causer-attributes', $activity->id) }}')
@@ -292,7 +312,8 @@
                     <template x-teleport="body">
                         <div x-show="open" x-transition @click.outside="open = false"
                              :style="'top:' + pos.top + 'px;left:' + pos.left + 'px'"
-                             class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3 -translate-y-full">
+                             :class="pos.above ? '-translate-y-full' : ''"
+                             class="fixed z-[9999] w-[40rem] max-h-96 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 p-3">
                             <div class="flex items-center justify-between gap-2 mb-2">
                                 <div class="text-xs font-semibold text-gray-500 uppercase shrink-0">{{ __('activitylog-browse::messages.causer_attributes') }}</div>
                                 <template x-if="!loading && attrs !== null && Object.keys(attrs).length > 5">

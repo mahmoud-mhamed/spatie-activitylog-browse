@@ -21,17 +21,17 @@
     @endif
 
     {{-- Overview Cards --}}
-    @php
-        $formattedSize = '—';
-        if ($tableSize) {
-            if ($tableSize >= 1073741824) $formattedSize = number_format($tableSize / 1073741824, 2) . ' GB';
-            elseif ($tableSize >= 1048576) $formattedSize = number_format($tableSize / 1048576, 1) . ' MB';
-            else $formattedSize = number_format($tableSize / 1024, 1) . ' KB';
+    <div class="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4" x-data="{
+        formatSize(bytes) {
+            if (!bytes) return '—';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0, size = bytes;
+            for (; size >= 1024 && i < units.length - 1; i++) size /= 1024;
+            return size.toFixed(3) + ' ' + units[i];
         }
-    @endphp
-    <div class="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+    }">
         @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_total_rows'), 'value' => number_format($totalRows)])
-        @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_table_size'), 'value' => $formattedSize])
+        @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_table_size'), 'alpine' => 'formatSize(' . ((int) $tableSize) . ')'])
         @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_oldest_entry'), 'value' => $oldestEntry ? $oldestEntry->format('Y-m-d') : '—', 'size' => 'text-sm'])
         @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_newest_entry'), 'value' => $newestEntry ? $newestEntry->format('Y-m-d') : '—', 'size' => 'text-sm'])
     </div>
@@ -50,6 +50,10 @@
         confirmAction: '',
         confirmMessage: '',
         submitting: false,
+        stripping: false,
+        stripTotal: 0,
+        stripProcessed: 0,
+        stripDone: false,
 
         get filteredModels() {
             if (!this.modelSearch) return this.models;
@@ -118,8 +122,49 @@
             if (this.confirmAction === 'delete') {
                 this.$refs.deleteForm.submit();
             } else {
-                this.$refs.stripForm.submit();
+                this.confirmModal = false;
+                this.submitting = false;
+                this.startStrip();
             }
+        },
+
+        async startStrip() {
+            this.stripping = true;
+            this.stripTotal = this.previewCount;
+            this.stripProcessed = 0;
+            this.stripDone = false;
+
+            const params = new URLSearchParams();
+            params.append('days', this.days);
+            params.append('_token', '{{ csrf_token() }}');
+            this.selectedModels.forEach(m => params.append('models[]', m));
+
+            while (true) {
+                try {
+                    const res = await fetch('{{ route("activitylog-browse.cleanup-strip-batch") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                        body: params.toString()
+                    });
+                    const data = await res.json();
+                    this.stripProcessed += data.processed;
+
+                    if (data.done) {
+                        this.stripDone = true;
+                        this.stripping = false;
+                        this.previewCount = 0;
+                        break;
+                    }
+                } catch (e) {
+                    this.stripping = false;
+                    break;
+                }
+            }
+        },
+
+        get stripPercent() {
+            if (this.stripTotal === 0) return 0;
+            return Math.min(100, Math.round((this.stripProcessed / this.stripTotal) * 100));
         }
     }" x-init="$watch('days', () => fetchPreview())">
 
@@ -213,7 +258,7 @@
                     {{-- Action Buttons --}}
                     <div class="flex gap-3">
                         <button type="button" @click="showConfirm('delete')"
-                                :disabled="!days || days < 1 || previewCount === null || previewCount === 0"
+                                :disabled="!days || days < 1 || previewCount === null || previewCount === 0 || stripping"
                                 class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                                  stroke="currentColor" stroke-width="2">
@@ -224,7 +269,7 @@
                         </button>
 
                         <button type="button" @click="showConfirm('strip')"
-                                :disabled="!days || days < 1 || previewCount === null || previewCount === 0"
+                                :disabled="!days || days < 1 || previewCount === null || previewCount === 0 || stripping"
                                 class="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-600 focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                                  stroke="currentColor" stroke-width="2">
@@ -247,14 +292,27 @@
                         </template>
                     </form>
 
-                    <form x-ref="stripForm" method="POST" action="{{ route('activitylog-browse.cleanup-strip') }}">
-                        @csrf
-                        @method('PUT')
-                        <input type="hidden" name="days" :value="days">
-                        <template x-for="m in selectedModels" :key="m">
-                            <input type="hidden" name="models[]" :value="m">
-                        </template>
-                    </form>
+                    {{-- Strip Progress --}}
+                    <div x-show="stripping || stripDone" x-transition class="mt-4 rounded-lg border p-4"
+                         :class="stripDone ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium" :class="stripDone ? 'text-green-800' : 'text-amber-800'"
+                                  x-text="stripDone
+                                      ? '{{ __('activitylog-browse::messages.strip_done', ['count' => '__COUNT__']) }}'.replace('__COUNT__', stripProcessed)
+                                      : '{{ __('activitylog-browse::messages.strip_progress') }}'">
+                            </span>
+                            <span class="text-xs" :class="stripDone ? 'text-green-600' : 'text-amber-600'"
+                                  x-text="'{{ __('activitylog-browse::messages.strip_progress_count', ['processed' => '__PROCESSED__', 'total' => '__TOTAL__']) }}'.replace('__PROCESSED__', stripProcessed).replace('__TOTAL__', stripTotal)">
+                            </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                            <div class="h-3 rounded-full transition-all duration-300 ease-out"
+                                 :class="stripDone ? 'bg-green-500' : 'bg-amber-500'"
+                                 :style="'width: ' + stripPercent + '%'">
+                            </div>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500 text-end" x-text="stripPercent + '%'"></div>
+                    </div>
 
                     {{-- Confirmation Modal --}}
                     <div x-show="confirmModal" x-transition

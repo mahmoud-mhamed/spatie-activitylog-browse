@@ -79,7 +79,7 @@
             const units = ['B', 'KB', 'MB', 'GB'];
             let i = 0, size = bytes;
             for (; size >= 1024 && i < units.length - 1; i++) size /= 1024;
-            return size.toFixed(1) + ' ' + units[i];
+            return size.toFixed(3) + ' ' + units[i];
         },
         formatDate(iso) {
             if (!iso) return '-';

@@ -147,32 +147,17 @@ class ActivityLogController extends Controller
 
     private function statsOverview(\Closure $scoped, ?string $dateFrom, ?string $dateTo): array
     {
-        $table = config('activitylog.table_name', 'activity_log');
-        $connection = config('activitylog.database_connection', config('database.default'));
+        $info = $this->getTableInfo($scoped);
 
-        $totalRows = $scoped()->count();
-
-        $tableSize = null;
-        try {
-            $dbName = DB::connection($connection)->getDatabaseName();
-            $result = DB::connection($connection)
-                ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
-            $tableSize = $result?->size ? (int) $result->size : null;
-        } catch (\Throwable) {
-        }
-
-        $oldestEntry = $scoped()->orderBy('created_at')->value('created_at');
-        $newestEntry = $scoped()->orderByDesc('created_at')->value('created_at');
-
-        $avgPerDay = $totalRows > 0 && $oldestEntry && $newestEntry
-            ? round($totalRows / max(1, $newestEntry->diffInDays($oldestEntry) ?: 1), 1)
+        $avgPerDay = $info['total_rows'] > 0 && $info['oldest_entry'] && $info['newest_entry']
+            ? round($info['total_rows'] / max(1, $info['newest_entry']->diffInDays($info['oldest_entry']) ?: 1), 1)
             : 0;
 
         return [
-            'total_rows' => $totalRows,
-            'table_size' => $tableSize,
-            'oldest_entry' => $oldestEntry?->toIso8601String(),
-            'newest_entry' => $newestEntry?->toIso8601String(),
+            'total_rows' => $info['total_rows'],
+            'table_size' => $info['table_size'],
+            'oldest_entry' => $info['oldest_entry']?->toIso8601String(),
+            'newest_entry' => $info['newest_entry']?->toIso8601String(),
             'avg_per_day' => $avgPerDay,
         ];
     }
@@ -493,8 +478,10 @@ class ActivityLogController extends Controller
                 $instance = new $modelClass;
                 $tableName = $instance->getTable();
                 $connection = $instance->getConnectionName() ?? config('database.default');
-                $dbName = DB::connection($connection)->getDatabaseName();
-                $result = DB::connection($connection)
+                $conn = DB::connection($connection);
+                $conn->statement("ANALYZE TABLE `{$tableName}`");
+                $dbName = $conn->getDatabaseName();
+                $result = $conn
                     ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $tableName]);
                 $tableSize = $result?->size ? (int) $result->size : null;
             } catch (\Throwable) {
@@ -655,22 +642,12 @@ class ActivityLogController extends Controller
             ->values()
             ->map(fn ($v) => ['value' => $v, 'label' => class_basename($v)]);
 
-        $table = config('activitylog.table_name', 'activity_log');
-        $connection = config('activitylog.database_connection', config('database.default'));
-
-        $totalRows = $activityModel::count();
-
-        $tableSize = null;
-        try {
-            $dbName = DB::connection($connection)->getDatabaseName();
-            $result = DB::connection($connection)
-                ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
-            $tableSize = $result?->size ? (int) $result->size : null;
-        } catch (\Throwable) {
-        }
-
-        $oldestEntry = $activityModel::orderBy('created_at')->value('created_at');
-        $newestEntry = $activityModel::orderByDesc('created_at')->value('created_at');
+        $scoped = fn () => $activityModel::query();
+        $info = $this->getTableInfo($scoped);
+        $totalRows = $info['total_rows'];
+        $tableSize = $info['table_size'];
+        $oldestEntry = $info['oldest_entry'];
+        $newestEntry = $info['newest_entry'];
 
         return view('activitylog-browse::cleanup', compact('models', 'totalRows', 'tableSize', 'oldestEntry', 'newestEntry'));
     }
@@ -714,6 +691,7 @@ class ActivityLogController extends Controller
 
         $count = 0;
         do {
+            set_time_limit(30);
             $ids = (clone $query)->limit(1000)->pluck('id');
             if ($ids->isEmpty()) {
                 break;
@@ -722,11 +700,13 @@ class ActivityLogController extends Controller
             $count += $deleted;
         } while (true);
 
+        $this->clearStatsCache();
+
         return redirect()->route('activitylog-browse.cleanup')
             ->with('success', __('activitylog-browse::messages.cleanup_success_delete', ['count' => $count]));
     }
 
-    public function cleanupStripProperties(Request $request)
+    public function cleanupStripBatch(Request $request)
     {
         $this->authorize();
 
@@ -736,6 +716,8 @@ class ActivityLogController extends Controller
             'models.*' => 'string',
         ]);
 
+        $batchSize = 10;
+
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
         $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
 
@@ -743,24 +725,91 @@ class ActivityLogController extends Controller
             $query->whereIn('subject_type', $request->input('models'));
         }
 
-        $count = 0;
-        $query->chunkById(500, function ($activities) use (&$count) {
-            foreach ($activities as $activity) {
-                $props = $activity->properties instanceof \Illuminate\Support\Collection
-                    ? $activity->properties->toArray()
-                    : (array) $activity->properties;
-                $newProps = [];
-                if (isset($props['attributes'])) {
-                    $newProps['attributes'] = $props['attributes'];
-                }
-                $activity->properties = $newProps;
-                $activity->save();
-                $count++;
-            }
-        });
+        $remaining = (clone $query)->count();
+        $ids = (clone $query)->limit($batchSize)->pluck('id');
 
-        return redirect()->route('activitylog-browse.cleanup')
-            ->with('success', __('activitylog-browse::messages.cleanup_success_strip', ['count' => $count]));
+        if ($ids->isEmpty()) {
+            $this->clearStatsCache();
+
+            return response()->json([
+                'processed' => 0,
+                'remaining' => 0,
+                'done' => true,
+            ]);
+        }
+
+        $activityModel::whereIn('id', $ids)
+            ->update([
+                'properties' => DB::raw(
+                    "CASE " .
+                    "WHEN JSON_CONTAINS_PATH(properties, 'one', '$.attributes') AND JSON_CONTAINS_PATH(properties, 'one', '$.old') " .
+                    "THEN JSON_OBJECT('attributes', JSON_EXTRACT(properties, '$.attributes'), 'old', JSON_EXTRACT(properties, '$.old')) " .
+                    "WHEN JSON_CONTAINS_PATH(properties, 'one', '$.attributes') " .
+                    "THEN JSON_OBJECT('attributes', JSON_EXTRACT(properties, '$.attributes')) " .
+                    "WHEN JSON_CONTAINS_PATH(properties, 'one', '$.old') " .
+                    "THEN JSON_OBJECT('old', JSON_EXTRACT(properties, '$.old')) " .
+                    "ELSE JSON_OBJECT() END"
+                ),
+            ]);
+
+        $processed = $ids->count();
+        $remaining -= $processed;
+        $done = $remaining <= 0;
+
+        if ($done) {
+            $this->clearStatsCache();
+        }
+
+        return response()->json([
+            'processed' => $processed,
+            'remaining' => $remaining,
+            'done' => $done,
+        ]);
+    }
+
+    private function getTableInfo(\Closure $scoped): array
+    {
+        $table = config('activitylog.table_name', 'activity_log');
+        $connection = config('activitylog.database_connection', config('database.default'));
+
+        $totalRows = $scoped()->count();
+
+        $tableSize = null;
+        try {
+            $conn = DB::connection($connection);
+            $conn->statement("ANALYZE TABLE `{$table}`");
+            $dbName = $conn->getDatabaseName();
+            $result = $conn
+                ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
+            $tableSize = $result?->size ? (int) $result->size : null;
+        } catch (\Throwable) {
+        }
+
+        $oldestEntry = $scoped()->orderBy('created_at')->value('created_at');
+        $newestEntry = $scoped()->orderByDesc('created_at')->value('created_at');
+
+        return [
+            'total_rows' => $totalRows,
+            'table_size' => $tableSize,
+            'oldest_entry' => $oldestEntry,
+            'newest_entry' => $newestEntry,
+        ];
+    }
+
+    private function clearStatsCache(): void
+    {
+        $sections = ['overview', 'events', 'log_names', 'models', 'causers', 'daily', 'hourly', 'weekday', 'system_user', 'attributes', 'monthly', 'peak_day'];
+
+        foreach ($sections as $section) {
+            Cache::forget("activitylog-browse:stats:{$section}");
+        }
+
+        try {
+            $table = config('activitylog.table_name', 'activity_log');
+            $connection = config('activitylog.database_connection', config('database.default'));
+            DB::connection($connection)->statement("OPTIMIZE TABLE `{$table}`");
+        } catch (\Throwable) {
+        }
     }
 
     public function switchLang(string $locale)
