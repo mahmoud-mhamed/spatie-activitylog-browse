@@ -110,12 +110,6 @@
                 </h3>
             </div>
 
-            <template x-if="info && info.attributes.length > 8">
-                <input type="text" x-model="search"
-                       placeholder="{{ __('activitylog-browse::messages.search') }}..."
-                       class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-1.5 border focus:border-blue-500 focus:ring-blue-500 mb-3">
-            </template>
-
             {{-- Loading --}}
             <div x-show="loading" class="flex justify-center py-6">
                 <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -164,6 +158,11 @@
 
                     {{-- Attributes grid --}}
                     <div>
+                        <template x-if="info && info.attributes.length > 8">
+                            <input type="text" x-model="search"
+                                   placeholder="{{ __('activitylog-browse::messages.search') }}..."
+                                   class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-1.5 border focus:border-blue-500 focus:ring-blue-500 mb-3">
+                        </template>
                         <div class="text-xs font-medium text-gray-500 uppercase mb-2">
                             {{ __('activitylog-browse::messages.model_attributes') }}
                             <span class="text-gray-400 normal-case" x-text="'(' + info.attributes.length + ')'"></span>

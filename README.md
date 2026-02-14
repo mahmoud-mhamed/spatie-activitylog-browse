@@ -4,14 +4,17 @@
 [![License](https://img.shields.io/packagist/l/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
 [![PHP Version](https://img.shields.io/packagist/php-v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
 
-A Laravel package that extends [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog) v4 with automatic model logging, rich contextual enrichment, and a web-based log browser.
+A Laravel package that extends [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog) v4 with automatic model logging, rich contextual enrichment, a web-based log browser, and a statistics dashboard.
 
 ## Features
 
 - **Auto-log all models** — Automatically log created/updated/deleted events for all Eloquent models without adding the `LogsActivity` trait
 - **Rich enrichment** — Attach request, device, performance, app, session, and execution context data to every log entry
 - **Browse UI** — Web interface to view, filter, search, and inspect activity logs with quick-preview popovers and color-coded diffs
+- **Statistics dashboard** — Comprehensive analytics page with charts, breakdowns, and peak-time analysis
 - **Related model browsing** — Navigate between related model logs via auto-discovered Eloquent relationships
+- **Model info sidebar** — View model stats, table size, and clickable attribute chips to filter by changed attributes
+- **Attribute translation** — Attribute names are translated using Laravel's `validation.attributes` lang file throughout the UI
 - **Localization** — Built-in support for English and Arabic with RTL layout
 
 ## Table of Contents
@@ -21,6 +24,7 @@ A Laravel package that extends [spatie/laravel-activitylog](https://github.com/s
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Browse UI](#browse-ui)
+- [Statistics Dashboard](#statistics-dashboard)
 - [Localization](#localization)
 - [Architecture](#architecture)
 - [License](#license)
@@ -281,9 +285,93 @@ Visit `/activity-log` (or your configured prefix) to browse logs. The UI provide
 - **Changed attribute filter** — Select a model type, then filter by a specific attribute (e.g. only show logs where `name` changed)
 - **Quick preview popover** — Hover on a row's info icon to see old/new value diff without leaving the list
 - **Current attributes popover** — View the subject's live model data from the list
+- **Model info sidebar** — When a model type is selected, a sidebar appears with model stats (total logs, unique records, table name, table size), event breakdown badges, and clickable attribute chips for quick filtering
 - **Related model navigation** — Click through to view all logs for a related model instance
 - **Detail view** — Color-coded old/new value diff, request data, device data, performance metrics (with Fast/Normal/Slow badges), app info, session info, execution context, and raw JSON view
 - **Language switcher** — Toggle between available locales directly from the UI
+
+### Attribute Translation
+
+Throughout the UI, attribute names (database column names like `first_name`, `email_verified_at`) are automatically translated using Laravel's `validation.attributes` language file:
+
+- If a translation exists in `validation.attributes.{key}` — displays the translated name with the original key in parentheses, e.g. **"First Name" (first_name)**
+- If no translation exists — displays a "headline" version of the key, e.g. **"Email Verified At"** with the original key in small text
+
+This applies to the changes table on the detail page, the model info sidebar attribute chips, and the statistics page's "Most Changed Attributes" section.
+
+To add translations, define them in your `lang/{locale}/validation.php`:
+
+```php
+'attributes' => [
+    'first_name' => 'First Name',
+    'email' => 'Email Address',
+    'created_at' => 'Creation Date',
+],
+```
+
+## Statistics Dashboard
+
+Visit `/activity-log/statistics` to access the statistics dashboard. The page loads each section independently via AJAX for fast initial rendering with skeleton loading states.
+
+### Period Filter
+
+A date range filter at the top applies to all sections. Select "From" and "To" dates and click "Apply" to filter. Click "Reset" to return to all-time data.
+
+### Sections
+
+The dashboard includes the following sections:
+
+#### Overview Cards
+Five summary cards showing:
+- **Total Entries** — Total number of activity log records
+- **Table Size** — Database table size (data + indexes)
+- **Avg / Day** — Average number of entries per day
+- **Oldest Entry** — Date of the first recorded activity
+- **Latest Entry** — Date of the most recent activity
+
+#### Peak Hour Chart
+A 24-hour bar chart showing activity distribution by hour of day. The busiest hour is highlighted in orange. Hover over any bar to see the exact count.
+
+#### Daily Activity
+A bar chart showing activity over the last 30 days (or the selected date range). Hover for exact date and count.
+
+#### Activity by Day of Week
+A bar chart showing activity distribution across weekdays (Sunday through Saturday). The busiest day is highlighted. Uses localized weekday names.
+
+#### Peak Times Summary
+Three cards showing:
+- **Busiest Hour** — The hour with the most activity (e.g. "2 PM")
+- **Busiest Day** — The single date with the highest activity count
+- **Busiest Month** — The month (YYYY-MM) with the most activity
+
+#### Monthly Activity
+A bar chart showing activity per month across all available data. The peak month is highlighted in orange.
+
+#### System vs User Actions
+A progress bar comparing activities performed by authenticated users vs system/automated actions (entries without a `causer_id`). Shows exact counts and percentages.
+
+#### Events Breakdown
+A ranked table showing each event type (`created`, `updated`, `deleted`, etc.) with count and a proportional bar. Events are color-coded with badges.
+
+#### Log Names
+A ranked table showing activity counts per log name (e.g. `default`, `auth`, `system`).
+
+#### Top Models
+A ranked table of the 10 most frequently logged model types (shown as class basenames).
+
+#### Top Causers
+A ranked table of the 10 most active causers. Resolves causer names from the database when possible (uses `name`, `email`, or `title` attributes).
+
+#### Most Changed Attributes
+A ranked table of the 30 most frequently changed attributes (from `updated` events). Scans the last 1000 update entries. The title shows the active search period or "All Time". Attribute names are translated using `validation.attributes` — showing the human-readable name with the original column name.
+
+### Caching
+
+Statistics responses are cached:
+- **All-time queries**: cached for 120 seconds
+- **Date-filtered queries**: cached for 60 seconds
+
+Cache keys are namespaced per section and date range.
 
 ## Localization
 
@@ -324,7 +412,7 @@ This copies the files to `lang/vendor/activitylog-browse/` where you can edit th
 | `SessionDataCollector` | Identifies the authentication guard used |
 | `ExecutionContextCollector` | Determines execution source (web/console/queue/schedule) and captures job/command names |
 | `RelationDiscovery` | Uses reflection to auto-discover Eloquent relationships for related model browsing |
-| `ActivityLogController` | Handles the browse UI with filtering, pagination, AJAX endpoints, and attribute inspection |
+| `ActivityLogController` | Handles the browse UI with filtering, pagination, AJAX endpoints, statistics API, and attribute inspection |
 | `SetLocale` | Middleware that applies the user's locale preference from the session |
 
 ## License

@@ -3,10 +3,16 @@
     $badge = $badge ?? false;
     $mono = $mono ?? false;
     $translate = $translate ?? false;
+    $periodLabel = $periodLabel ?? false;
 @endphp
 
 <div class="{{ $fullWidth ? 'mb-8' : '' }}">
-    <h2 class="text-lg font-semibold text-gray-800 mb-3">{{ $title }}</h2>
+    <h2 class="text-lg font-semibold text-gray-800 mb-3">
+        {{ $title }}
+        @if($periodLabel)
+            <span class="text-sm font-normal text-gray-400" x-text="hasFilter ? '(' + activeFrom + (activeTo ? ' → ' + activeTo : '') + ')' : '({{ __('activitylog-browse::messages.stats_all_time') }})'"></span>
+        @endif
+    </h2>
     <div class="bg-white rounded-lg shadow overflow-hidden">
         <template x-if="sl('{{ $sectionKey }}')">
             <div class="p-4 space-y-3">

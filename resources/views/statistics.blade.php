@@ -38,7 +38,6 @@
             hourly: { data: null, loading: true },
             weekday: { data: null, loading: true },
             system_user: { data: null, loading: true },
-            batches: { data: null, loading: true },
             attributes: { data: null, loading: true },
             monthly: { data: null, loading: true },
             peak_day: { data: null, loading: true },
@@ -382,8 +381,8 @@
             </template>
         </div>
 
-        {{-- System vs User + Batch --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {{-- System vs User --}}
+        <div class="grid grid-cols-1 gap-6 mb-8">
             <div>
                 <h2 class="text-lg font-semibold text-gray-800 mb-3">{{ __('activitylog-browse::messages.stats_system_vs_user') }}</h2>
                 <div class="bg-white rounded-lg shadow p-4">
@@ -410,26 +409,6 @@
                             <div class="flex justify-between mt-1 text-xs text-gray-400">
                                 <span x-text="userPct() + '% {{ __('activitylog-browse::messages.stats_user_actions') }}'"></span>
                                 <span x-text="(100 - userPct()) + '% {{ __('activitylog-browse::messages.stats_system_actions') }}'"></span>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-            <div>
-                <h2 class="text-lg font-semibold text-gray-800 mb-3">{{ __('activitylog-browse::messages.stats_batch_operations') }}</h2>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <template x-if="sl('batches')">
-                        <div class="h-24 flex items-center justify-center"><div class="h-6 w-32 bg-gray-100 rounded animate-pulse"></div></div>
-                    </template>
-                    <template x-if="!sl('batches')">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="text-center">
-                                <div class="text-2xl font-bold text-purple-600" x-text="(s('batches')?.batch_count || 0).toLocaleString()"></div>
-                                <div class="text-xs text-gray-500 mt-1">{{ __('activitylog-browse::messages.stats_batch_count') }}</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-bold text-purple-600" x-text="(s('batches')?.batched_entries || 0).toLocaleString()"></div>
-                                <div class="text-xs text-gray-500 mt-1">{{ __('activitylog-browse::messages.stats_batched_entries') }}</div>
                             </div>
                         </div>
                     </template>
@@ -486,6 +465,7 @@
             'sectionKey' => 'attributes',
             'dataKey' => 'top_attributes',
             'title' => __('activitylog-browse::messages.stats_top_attributes'),
+            'periodLabel' => true,
             'colLabel' => __('activitylog-browse::messages.stats_attribute'),
             'itemKey' => 'attribute',
             'barColor' => 'bg-rose-500',

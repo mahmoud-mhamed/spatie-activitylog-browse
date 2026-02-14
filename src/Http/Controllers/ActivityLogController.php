@@ -137,7 +137,6 @@ class ActivityLogController extends Controller
                 'hourly' => $this->statsHourly($scoped),
                 'weekday' => $this->statsWeekday($scoped),
                 'system_user' => $this->statsSystemUser($scoped),
-                'batches' => $this->statsBatches($scoped),
                 'attributes' => $this->statsAttributes($scoped),
                 'monthly' => $this->statsMonthly($scoped),
                 'peak_day' => $this->statsPeakDay($scoped),
@@ -294,16 +293,6 @@ class ActivityLogController extends Controller
         return ['user_actions' => $userActions, 'system_actions' => $total - $userActions];
     }
 
-    private function statsBatches(\Closure $scoped): array
-    {
-        $batchedEntries = $scoped()->whereNotNull('batch_uuid')->count();
-
-        return [
-            'batch_count' => $batchedEntries > 0 ? $scoped()->whereNotNull('batch_uuid')->distinct()->count('batch_uuid') : 0,
-            'batched_entries' => $batchedEntries,
-        ];
-    }
-
     private function statsAttributes(\Closure $scoped): array
     {
         $topAttributes = collect();
@@ -311,7 +300,7 @@ class ActivityLogController extends Controller
             $recentProps = $scoped()->whereNotNull('properties')
                 ->where('event', 'updated')
                 ->orderByDesc('id')
-                ->limit(200)
+                ->limit(1000)
                 ->pluck('properties');
 
             $attrCounts = [];
@@ -325,7 +314,7 @@ class ActivityLogController extends Controller
                 }
             }
             arsort($attrCounts);
-            $topAttributes = collect(array_slice($attrCounts, 0, 10, true))
+            $topAttributes = collect(array_slice($attrCounts, 0, 30, true))
                 ->map(fn ($count, $attr) => ['attribute' => $attr, 'count' => $count])
                 ->values();
         } catch (\Throwable) {
