@@ -18,6 +18,10 @@ Route::middleware(array_merge($middleware, [SetLocale::class]))
         Route::get('/model-info', [ActivityLogController::class, 'modelInfo'])->name('activitylog-browse.model-info');
         Route::get('/causers', [ActivityLogController::class, 'causers'])->name('activitylog-browse.causers');
         Route::get('/switch-lang/{locale}', [ActivityLogController::class, 'switchLang'])->name('activitylog-browse.switch-lang');
+        Route::get('/cleanup', [ActivityLogController::class, 'cleanup'])->name('activitylog-browse.cleanup');
+        Route::get('/cleanup/preview', [ActivityLogController::class, 'cleanupPreview'])->name('activitylog-browse.cleanup-preview');
+        Route::delete('/cleanup/delete', [ActivityLogController::class, 'cleanupDelete'])->name('activitylog-browse.cleanup-delete');
+        Route::put('/cleanup/strip', [ActivityLogController::class, 'cleanupStripProperties'])->name('activitylog-browse.cleanup-strip');
         Route::get('/{activity}/attributes', [ActivityLogController::class, 'subjectAttributes'])->name('activitylog-browse.subject-attributes');
         Route::get('/{activity}/causer-attributes', [ActivityLogController::class, 'causerAttributes'])->name('activitylog-browse.causer-attributes');
         Route::get('/{activity}/related/{relation}', [ActivityLogController::class, 'relatedLogs'])->name('activitylog-browse.related-logs');

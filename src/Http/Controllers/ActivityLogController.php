@@ -642,6 +642,127 @@ class ActivityLogController extends Controller
         ]);
     }
 
+    public function cleanup()
+    {
+        $this->authorize();
+
+        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+
+        $models = $activityModel::distinct()
+            ->whereNotNull('subject_type')
+            ->pluck('subject_type')
+            ->sort()
+            ->values()
+            ->map(fn ($v) => ['value' => $v, 'label' => class_basename($v)]);
+
+        $table = config('activitylog.table_name', 'activity_log');
+        $connection = config('activitylog.database_connection', config('database.default'));
+
+        $totalRows = $activityModel::count();
+
+        $tableSize = null;
+        try {
+            $dbName = DB::connection($connection)->getDatabaseName();
+            $result = DB::connection($connection)
+                ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
+            $tableSize = $result?->size ? (int) $result->size : null;
+        } catch (\Throwable) {
+        }
+
+        $oldestEntry = $activityModel::orderBy('created_at')->value('created_at');
+        $newestEntry = $activityModel::orderByDesc('created_at')->value('created_at');
+
+        return view('activitylog-browse::cleanup', compact('models', 'totalRows', 'tableSize', 'oldestEntry', 'newestEntry'));
+    }
+
+    public function cleanupPreview(Request $request)
+    {
+        $this->authorize();
+
+        $request->validate([
+            'days' => 'required|integer|min:1',
+            'models' => 'nullable|array',
+            'models.*' => 'string',
+        ]);
+
+        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+        $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
+
+        if ($request->filled('models')) {
+            $query->whereIn('subject_type', $request->input('models'));
+        }
+
+        return response()->json(['count' => $query->count()]);
+    }
+
+    public function cleanupDelete(Request $request)
+    {
+        $this->authorize();
+
+        $request->validate([
+            'days' => 'required|integer|min:1',
+            'models' => 'nullable|array',
+            'models.*' => 'string',
+        ]);
+
+        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+        $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
+
+        if ($request->filled('models')) {
+            $query->whereIn('subject_type', $request->input('models'));
+        }
+
+        $count = 0;
+        do {
+            $ids = (clone $query)->limit(1000)->pluck('id');
+            if ($ids->isEmpty()) {
+                break;
+            }
+            $deleted = $activityModel::whereIn('id', $ids)->delete();
+            $count += $deleted;
+        } while (true);
+
+        return redirect()->route('activitylog-browse.cleanup')
+            ->with('success', __('activitylog-browse::messages.cleanup_success_delete', ['count' => $count]));
+    }
+
+    public function cleanupStripProperties(Request $request)
+    {
+        $this->authorize();
+
+        $request->validate([
+            'days' => 'required|integer|min:1',
+            'models' => 'nullable|array',
+            'models.*' => 'string',
+        ]);
+
+        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+        $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
+
+        if ($request->filled('models')) {
+            $query->whereIn('subject_type', $request->input('models'));
+        }
+
+        $count = 0;
+        $query->chunkById(500, function ($activities) use (&$count) {
+            foreach ($activities as $activity) {
+                $props = $activity->properties instanceof \Illuminate\Support\Collection
+                    ? $activity->properties->toArray()
+                    : (array) $activity->properties;
+                $newProps = [];
+                if (isset($props['attributes'])) {
+                    $newProps['attributes'] = $props['attributes'];
+                }
+                $activity->properties = $newProps;
+                $activity->save();
+                $count++;
+            }
+        });
+
+        return redirect()->route('activitylog-browse.cleanup')
+            ->with('success', __('activitylog-browse::messages.cleanup_success_strip', ['count' => $count]));
+    }
+
     public function switchLang(string $locale)
     {
         $availableLocales = config('activitylog-browse.browse.available_locales', ['en', 'ar']);

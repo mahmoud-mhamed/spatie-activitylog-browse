@@ -185,26 +185,36 @@
         {{-- Overview Cards --}}
         <h2 class="text-lg font-semibold text-gray-800 mb-3">{{ __('activitylog-browse::messages.stats_overview') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-            @foreach([
-                ['key' => 'total_rows', 'label' => 'stats_total_entries', 'format' => 'number'],
-                ['key' => 'table_size', 'label' => 'stats_table_size', 'format' => 'size'],
-                ['key' => 'avg_per_day', 'label' => 'stats_avg_per_day', 'format' => 'raw'],
-                ['key' => 'oldest_entry', 'label' => 'stats_oldest_entry', 'format' => 'date'],
-                ['key' => 'newest_entry', 'label' => 'stats_latest_entry', 'format' => 'date'],
-            ] as $card)
-                <div class="bg-white rounded-lg shadow px-4 py-3">
-                    <div class="text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.' . $card['label']) }}</div>
-                    <div class="mt-1 h-7 w-16 bg-gray-100 rounded animate-pulse" x-show="sl('overview')"></div>
-                    <div class="mt-1 text-xl font-bold text-gray-900" x-show="!sl('overview')"
-                        x-text="
-                            @if($card['format'] === 'number') (s('overview')?.{{ $card['key'] }} ?? 0).toLocaleString()
-                            @elseif($card['format'] === 'size') formatSize(s('overview')?.{{ $card['key'] }})
-                            @elseif($card['format'] === 'date') formatDate(s('overview')?.{{ $card['key'] }})
-                            @else s('overview')?.{{ $card['key'] }} ?? '-'
-                            @endif
-                        "></div>
-                </div>
-            @endforeach
+            @include('activitylog-browse::partials.stat-card', [
+                'label' => __('activitylog-browse::messages.stats_total_entries'),
+                'alpine' => "(s('overview')?.total_rows ?? 0).toLocaleString()",
+                'loading' => "sl('overview')",
+                'size' => 'text-xl',
+            ])
+            @include('activitylog-browse::partials.stat-card', [
+                'label' => __('activitylog-browse::messages.stats_table_size'),
+                'alpine' => "formatSize(s('overview')?.table_size)",
+                'loading' => "sl('overview')",
+                'size' => 'text-xl',
+            ])
+            @include('activitylog-browse::partials.stat-card', [
+                'label' => __('activitylog-browse::messages.stats_avg_per_day'),
+                'alpine' => "s('overview')?.avg_per_day ?? '-'",
+                'loading' => "sl('overview')",
+                'size' => 'text-xl',
+            ])
+            @include('activitylog-browse::partials.stat-card', [
+                'label' => __('activitylog-browse::messages.stats_oldest_entry'),
+                'alpine' => "formatDate(s('overview')?.oldest_entry)",
+                'loading' => "sl('overview')",
+                'size' => 'text-xl',
+            ])
+            @include('activitylog-browse::partials.stat-card', [
+                'label' => __('activitylog-browse::messages.stats_latest_entry'),
+                'alpine' => "formatDate(s('overview')?.newest_entry)",
+                'loading' => "sl('overview')",
+                'size' => 'text-xl',
+            ])
         </div>
 
         {{-- Peak Hour Chart --}}
