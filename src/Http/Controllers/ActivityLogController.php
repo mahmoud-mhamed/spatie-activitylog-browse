@@ -716,7 +716,7 @@ class ActivityLogController extends Controller
             'models.*' => 'string',
         ]);
 
-        $batchSize = 10;
+        $batchSize = 100;
 
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
         $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
