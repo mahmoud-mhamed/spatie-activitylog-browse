@@ -34,8 +34,8 @@ class ActivityLogController extends Controller
 
         if ($request->filled('subject_id')) {
             $ids = array_filter(
-                array_map(fn ($v) => (int) trim($v), explode(',', $request->input('subject_id'))),
-                fn ($v) => $v > 0
+                array_map(fn ($v) => trim($v), explode(',', $request->input('subject_id'))),
+                fn ($v) => $v !== ''
             );
             if (count($ids) === 1) {
                 $query->where('subject_id', $ids[0]);

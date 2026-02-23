@@ -19,6 +19,7 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->publishAssets();
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'activitylog-browse');
         $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'activitylog-browse');
