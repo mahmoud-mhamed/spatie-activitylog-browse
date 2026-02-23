@@ -4,6 +4,7 @@ namespace Mhamed\SpatieActivitylogBrowse\Listeners;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
+use Mhamed\SpatieActivitylogBrowse\Support\ColumnMigrator;
 use Spatie\Activitylog\ActivitylogServiceProvider;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -118,9 +119,34 @@ class GlobalModelLogger
                 ->performedOn($model)
                 ->withProperties($properties)
                 ->log($description);
+        } catch (\Throwable $e) {
+            if ($this->isDataTruncationError($e)) {
+                try {
+                    ColumnMigrator::fixMorphIdColumns();
+
+                    activity($logName)
+                        ->event($event)
+                        ->performedOn($model)
+                        ->withProperties($properties)
+                        ->log($description);
+                } catch (\Throwable $retryException) {
+                    report($retryException);
+                }
+            } else {
+                report($e);
+            }
         } finally {
             $this->isLogging = false;
         }
+    }
+
+    protected function isDataTruncationError(\Throwable $e): bool
+    {
+        $message = $e->getMessage();
+
+        return str_contains($message, 'Data truncated')
+            || str_contains($message, '1265')
+            || str_contains($message, 'Numeric value out of range');
     }
 
     protected function modelKey(Model $model): string

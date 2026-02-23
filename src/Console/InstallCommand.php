@@ -5,6 +5,7 @@ namespace Mhamed\SpatieActivitylogBrowse\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Mhamed\SpatieActivitylogBrowse\Support\ColumnMigrator;
 
 class InstallCommand extends Command
 {
@@ -32,6 +33,14 @@ class InstallCommand extends Command
         // Run migrations
         if ($this->confirm('Run migrations now?', true)) {
             $this->call('migrate');
+        }
+
+        // Fix morph ID columns to support UUIDs
+        $this->info('Ensuring morph ID columns support UUID format...');
+        if (ColumnMigrator::fixMorphIdColumns()) {
+            $this->info('  Fixed subject_id and/or causer_id columns to support UUIDs.');
+        } else {
+            $this->line('  Morph ID columns already support UUIDs or table not found.');
         }
 
         // Add performance indexes
