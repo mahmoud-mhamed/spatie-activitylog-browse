@@ -17,23 +17,31 @@ class InstallCommand extends Command
     {
         $this->info('Installing ActivityLog Browse...');
 
-        // Publish spatie/laravel-activitylog migration
-        $this->info('Publishing spatie/laravel-activitylog migration...');
-        $this->call('vendor:publish', [
-            '--provider' => 'Spatie\Activitylog\ActivitylogServiceProvider',
-            '--tag' => 'activitylog-migrations',
-        ]);
+        $connection = config('activitylog.database_connection');
+        $tableName = config('activitylog.table_name', 'activity_log');
+        $tableExists = Schema::connection($connection)->hasTable($tableName);
+
+        if ($tableExists) {
+            $this->info("Table '{$tableName}' already exists. Skipping spatie migrations.");
+            $this->ensureMissingColumns($connection, $tableName);
+        } else {
+            // Publish spatie/laravel-activitylog migration only if table doesn't exist
+            $this->info('Publishing spatie/laravel-activitylog migration...');
+            $this->call('vendor:publish', [
+                '--provider' => 'Spatie\Activitylog\ActivitylogServiceProvider',
+                '--tag' => 'activitylog-migrations',
+            ]);
+
+            if ($this->confirm('Run migrations now?', true)) {
+                $this->call('migrate');
+            }
+        }
 
         // Publish our config
         $this->info('Publishing activitylog-browse config...');
         $this->call('vendor:publish', [
             '--tag' => 'activitylog-browse-config',
         ]);
-
-        // Run migrations
-        if ($this->confirm('Run migrations now?', true)) {
-            $this->call('migrate');
-        }
 
         // Fix morph ID columns to support UUIDs
         $this->info('Ensuring morph ID columns support UUID format...');
@@ -52,6 +60,27 @@ class InstallCommand extends Command
         $this->info('Visit /' . config('activitylog-browse.browse.prefix', 'activity-log') . ' to browse your logs.');
 
         return self::SUCCESS;
+    }
+
+    protected function ensureMissingColumns(?string $connection, string $tableName): void
+    {
+        $requiredColumns = [
+            'event' => function ($table) {
+                $table->string('event')->nullable()->after('subject_type');
+            },
+            'batch_uuid' => function ($table) {
+                $table->uuid('batch_uuid')->nullable()->after('properties');
+            },
+        ];
+
+        foreach ($requiredColumns as $column => $definition) {
+            if (Schema::connection($connection)->hasColumn($tableName, $column)) {
+                $this->line("  Column '{$column}' already exists. Skipping.");
+            } else {
+                Schema::connection($connection)->table($tableName, $definition);
+                $this->info("  Added column '{$column}'.");
+            }
+        }
     }
 
     protected function addIndexes(): void
