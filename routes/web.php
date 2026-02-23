@@ -21,7 +21,6 @@ Route::middleware(array_merge($middleware, [SetLocale::class]))
         Route::get('/cleanup', [ActivityLogController::class, 'cleanup'])->name('activitylog-browse.cleanup');
         Route::get('/cleanup/preview', [ActivityLogController::class, 'cleanupPreview'])->name('activitylog-browse.cleanup-preview');
         Route::delete('/cleanup/delete', [ActivityLogController::class, 'cleanupDelete'])->name('activitylog-browse.cleanup-delete');
-        Route::post('/cleanup/strip-batch', [ActivityLogController::class, 'cleanupStripBatch'])->name('activitylog-browse.cleanup-strip-batch');
         Route::get('/{activity}/attributes', [ActivityLogController::class, 'subjectAttributes'])->name('activitylog-browse.subject-attributes');
         Route::get('/{activity}/causer-attributes', [ActivityLogController::class, 'causerAttributes'])->name('activitylog-browse.causer-attributes');
         Route::get('/{activity}/related/{relation}', [ActivityLogController::class, 'relatedLogs'])->name('activitylog-browse.related-logs');
