@@ -34,8 +34,8 @@ class ActivityLogController extends Controller
 
         if ($request->filled('subject_id')) {
             $ids = array_filter(
-                array_map(fn ($v) => trim($v), explode(',', $request->input('subject_id'))),
-                fn ($v) => $v !== ''
+                array_map(fn($v) => trim($v), explode(',', $request->input('subject_id'))),
+                fn($v) => $v !== ''
             );
             if (count($ids) === 1) {
                 $query->where('subject_id', $ids[0]);
@@ -62,14 +62,14 @@ class ActivityLogController extends Controller
 
         if ($request->filled('changed_attribute')) {
             $attrs = array_filter(array_map(
-                fn ($v) => preg_replace('/[^a-zA-Z0-9_.\-]/', '', trim($v)),
+                fn($v) => preg_replace('/[^a-zA-Z0-9_.\-]/', '', trim($v)),
                 explode(',', $request->input('changed_attribute'))
             ));
             if (count($attrs) === 1) {
                 $attr = $attrs[0];
                 $query->where(function ($q) use ($attr) {
                     $q->whereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.attributes.' . $attr])
-                      ->orWhereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.old.' . $attr]);
+                        ->orWhereRaw("JSON_CONTAINS_PATH(properties, 'one', ?)", ['$.old.' . $attr]);
                 });
             } elseif (count($attrs) > 1) {
                 $query->where(function ($q) use ($attrs) {
@@ -170,7 +170,7 @@ class ActivityLogController extends Controller
                 ->groupBy('event')
                 ->orderByDesc('count')
                 ->get()
-                ->map(fn ($row) => ['event' => $row->event, 'count' => $row->count]),
+                ->map(fn($row) => ['event' => $row->event, 'count' => $row->count]),
         ];
     }
 
@@ -182,7 +182,7 @@ class ActivityLogController extends Controller
                 ->groupBy('log_name')
                 ->orderByDesc('count')
                 ->get()
-                ->map(fn ($row) => ['log_name' => $row->log_name, 'count' => $row->count]),
+                ->map(fn($row) => ['log_name' => $row->log_name, 'count' => $row->count]),
         ];
     }
 
@@ -195,7 +195,7 @@ class ActivityLogController extends Controller
                 ->orderByDesc('count')
                 ->limit(10)
                 ->get()
-                ->map(fn ($row) => ['subject_type' => class_basename($row->subject_type), 'count' => $row->count]),
+                ->map(fn($row) => ['subject_type' => class_basename($row->subject_type), 'count' => $row->count]),
         ];
     }
 
@@ -215,7 +215,7 @@ class ActivityLogController extends Controller
                 $causerClass = \Illuminate\Database\Eloquent\Relations\Relation::getMorphedModel($type) ?? $type;
                 if (class_exists($causerClass)) {
                     $ids = $rows->pluck('causer_id')->all();
-                    $models = $causerClass::whereIn((new $causerClass)->getKeyName(), $ids)->get()->keyBy(fn ($m) => $m->getKey());
+                    $models = $causerClass::whereIn((new $causerClass)->getKeyName(), $ids)->get()->keyBy(fn($m) => $m->getKey());
                     foreach ($models as $id => $model) {
                         $name = $model->name ?? $model->email ?? $model->title ?? null;
                         if ($name) {
@@ -238,13 +238,13 @@ class ActivityLogController extends Controller
     private function statsDaily(\Closure $scoped, bool $hasDateFilter): array
     {
         $q = $scoped()->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'));
-        if (! $hasDateFilter) {
+        if (!$hasDateFilter) {
             $q->where('created_at', '>=', now()->subDays(30));
         }
 
         return [
             'daily_activity' => $q->groupBy(DB::raw('DATE(created_at)'))->orderBy('date')->limit(90)->get()
-                ->map(fn ($row) => ['date' => $row->date, 'count' => $row->count]),
+                ->map(fn($row) => ['date' => $row->date, 'count' => $row->count]),
         ];
     }
 
@@ -255,7 +255,7 @@ class ActivityLogController extends Controller
                 ->groupBy(DB::raw('HOUR(created_at)'))
                 ->orderBy('hour')
                 ->get()
-                ->map(fn ($row) => ['hour' => (int) $row->hour, 'count' => $row->count]),
+                ->map(fn($row) => ['hour' => (int)$row->hour, 'count' => $row->count]),
         ];
     }
 
@@ -266,7 +266,7 @@ class ActivityLogController extends Controller
                 ->groupBy(DB::raw('DAYOFWEEK(created_at)'))
                 ->orderBy('dow')
                 ->get()
-                ->map(fn ($row) => ['dow' => (int) $row->dow, 'count' => $row->count]),
+                ->map(fn($row) => ['dow' => (int)$row->dow, 'count' => $row->count]),
         ];
     }
 
@@ -290,7 +290,7 @@ class ActivityLogController extends Controller
 
             $attrCounts = [];
             foreach ($recentProps as $props) {
-                $p = $props instanceof \Illuminate\Support\Collection ? $props->toArray() : (array) $props;
+                $p = $props instanceof \Illuminate\Support\Collection ? $props->toArray() : (array)$props;
                 foreach (array_keys($p['attributes'] ?? []) as $k) {
                     $attrCounts[$k] = ($attrCounts[$k] ?? 0) + 1;
                 }
@@ -300,7 +300,7 @@ class ActivityLogController extends Controller
             }
             arsort($attrCounts);
             $topAttributes = collect(array_slice($attrCounts, 0, 30, true))
-                ->map(fn ($count, $attr) => ['attribute' => $attr, 'count' => $count])
+                ->map(fn($count, $attr) => ['attribute' => $attr, 'count' => $count])
                 ->values();
         } catch (\Throwable) {
         }
@@ -311,13 +311,13 @@ class ActivityLogController extends Controller
     private function statsMonthly(\Closure $scoped): array
     {
         $monthlyActivity = $scoped()->select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
-                DB::raw('COUNT(*) as count')
-            )
+            DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
+            DB::raw('COUNT(*) as count')
+        )
             ->groupBy(DB::raw("DATE_FORMAT(created_at, '%Y-%m')"))
             ->orderBy('month')
             ->get()
-            ->map(fn ($row) => ['month' => $row->month, 'count' => $row->count]);
+            ->map(fn($row) => ['month' => $row->month, 'count' => $row->count]);
 
         $peakMonth = $monthlyActivity->sortByDesc('count')->first();
 
@@ -349,7 +349,7 @@ class ActivityLogController extends Controller
         $column = $request->input('column');
         $allowed = ['log_name', 'event', 'subject_type', 'causer_type'];
 
-        if (! in_array($column, $allowed)) {
+        if (!in_array($column, $allowed)) {
             return response()->json([]);
         }
 
@@ -365,7 +365,7 @@ class ActivityLogController extends Controller
 
         $useBasename = in_array($column, ['subject_type', 'causer_type']);
 
-        $options = $values->map(fn ($v) => [
+        $options = $values->map(fn($v) => [
             'value' => $v,
             'label' => $useBasename ? class_basename($v) : $v,
         ])->values();
@@ -379,7 +379,7 @@ class ActivityLogController extends Controller
 
         $subjectType = $request->input('subject_type');
 
-        if (! $subjectType) {
+        if (!$subjectType) {
             return response()->json([]);
         }
 
@@ -394,7 +394,7 @@ class ActivityLogController extends Controller
         $keys = collect();
 
         foreach ($activities as $properties) {
-            $props = $properties instanceof \Illuminate\Support\Collection ? $properties->toArray() : (array) $properties;
+            $props = $properties instanceof \Illuminate\Support\Collection ? $properties->toArray() : (array)$properties;
 
             if (isset($props['attributes']) && is_array($props['attributes'])) {
                 $keys = $keys->merge(array_keys($props['attributes']));
@@ -413,7 +413,7 @@ class ActivityLogController extends Controller
 
         $subjectType = $request->input('subject_type');
 
-        if (! $subjectType) {
+        if (!$subjectType) {
             return response()->json([]);
         }
 
@@ -428,7 +428,7 @@ class ActivityLogController extends Controller
 
         $keys = collect();
         foreach ($activities as $properties) {
-            $props = $properties instanceof \Illuminate\Support\Collection ? $properties->toArray() : (array) $properties;
+            $props = $properties instanceof \Illuminate\Support\Collection ? $properties->toArray() : (array)$properties;
             if (isset($props['attributes']) && is_array($props['attributes'])) {
                 $keys = $keys->merge(array_keys($props['attributes']));
             }
@@ -483,7 +483,7 @@ class ActivityLogController extends Controller
                 $dbName = $conn->getDatabaseName();
                 $result = $conn
                     ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $tableName]);
-                $tableSize = $result?->size ? (int) $result->size : null;
+                $tableSize = $result?->size ? (int)$result->size : null;
             } catch (\Throwable) {
             }
         }
@@ -507,7 +507,7 @@ class ActivityLogController extends Controller
 
         $causerType = $request->input('causer_type');
 
-        if (! $causerType) {
+        if (!$causerType) {
             return response()->json([]);
         }
 
@@ -535,7 +535,7 @@ class ActivityLogController extends Controller
                         ? $name . ' (#' . $model->getKey() . ')'
                         : '#' . $model->getKey();
 
-                    return ['value' => (string) $model->getKey(), 'label' => $label];
+                    return ['value' => (string)$model->getKey(), 'label' => $label];
                 })->sortBy('label')->values());
             } catch (\Throwable) {
                 // Fall through to ID-only fallback
@@ -543,7 +543,7 @@ class ActivityLogController extends Controller
         }
 
         return response()->json(
-            $causerIds->sort()->map(fn ($id) => ['value' => (string) $id, 'label' => '#' . $id])->values()
+            $causerIds->sort()->map(fn($id) => ['value' => (string)$id, 'label' => '#' . $id])->values()
         );
     }
 
@@ -554,7 +554,7 @@ class ActivityLogController extends Controller
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
         $activity = $activityModel::findOrFail($id);
 
-        if (! $activity->subject_type || ! $activity->subject) {
+        if (!$activity->subject_type || !$activity->subject) {
             return response()->json([]);
         }
 
@@ -572,7 +572,7 @@ class ActivityLogController extends Controller
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
         $activity = $activityModel::findOrFail($id);
 
-        if (! $activity->causer_type || ! $activity->causer) {
+        if (!$activity->causer_type || !$activity->causer) {
             return response()->json([]);
         }
 
@@ -605,14 +605,14 @@ class ActivityLogController extends Controller
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
         $activity = $activityModel::with('subject')->findOrFail($id);
 
-        if (! $activity->subject) {
+        if (!$activity->subject) {
             abort(Response::HTTP_NOT_FOUND);
         }
 
         $subject = $activity->subject;
         $relations = RelationDiscovery::getRelations($subject);
 
-        if (! in_array($relation, $relations)) {
+        if (!in_array($relation, $relations)) {
             abort(Response::HTTP_NOT_FOUND);
         }
 
@@ -640,9 +640,9 @@ class ActivityLogController extends Controller
             ->pluck('subject_type')
             ->sort()
             ->values()
-            ->map(fn ($v) => ['value' => $v, 'label' => class_basename($v)]);
+            ->map(fn($v) => ['value' => $v, 'label' => class_basename($v)]);
 
-        $scoped = fn () => $activityModel::query();
+        $scoped = fn() => $activityModel::query();
         $info = $this->getTableInfo($scoped);
         $totalRows = $info['total_rows'];
         $tableSize = $info['table_size'];
@@ -721,7 +721,7 @@ class ActivityLogController extends Controller
             $dbName = $conn->getDatabaseName();
             $result = $conn
                 ->selectOne("SELECT (data_length + index_length) AS size FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", [$dbName, $table]);
-            $tableSize = $result?->size ? (int) $result->size : null;
+            $tableSize = $result?->size ? (int)$result->size : null;
         } catch (\Throwable) {
         }
 
@@ -756,7 +756,7 @@ class ActivityLogController extends Controller
     {
         $availableLocales = config('activitylog-browse.browse.available_locales', ['en', 'ar']);
 
-        if (! in_array($locale, $availableLocales)) {
+        if (!in_array($locale, $availableLocales)) {
             abort(Response::HTTP_BAD_REQUEST);
         }
 
