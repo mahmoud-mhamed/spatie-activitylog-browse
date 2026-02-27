@@ -70,6 +70,13 @@ php artisan vendor:publish --tag=activitylog-browse-views
 php artisan vendor:publish --tag=activitylog-browse-lang
 ```
 
+> **Tip:** Use `--force` to overwrite previously published files (e.g., after updating the package):
+> ```bash
+> php artisan vendor:publish --tag=activitylog-browse-config --force
+> php artisan vendor:publish --tag=activitylog-browse-views --force
+> php artisan vendor:publish --tag=activitylog-browse-lang --force
+> ```
+
 ### Local Development
 
 To install as a local path repository, add the following to your Laravel app's `composer.json`:
@@ -395,6 +402,8 @@ To customize translations, publish the language files:
 
 ```bash
 php artisan vendor:publish --tag=activitylog-browse-lang
+# Use --force to overwrite previously published files
+php artisan vendor:publish --tag=activitylog-browse-lang --force
 ```
 
 This copies the files to `lang/vendor/activitylog-browse/` where you can edit them or add new languages.

@@ -88,6 +88,17 @@ php artisan vendor:publish --tag=activitylog-browse-lang
 
 </div>
 
+> **ملاحظة:** استخدم `--force` لإعادة نشر الملفات المنشورة سابقاً (مثلاً بعد تحديث الحزمة):
+> <div dir="ltr">
+>
+> ```bash
+> php artisan vendor:publish --tag=activitylog-browse-config --force
+> php artisan vendor:publish --tag=activitylog-browse-views --force
+> php artisan vendor:publish --tag=activitylog-browse-lang --force
+> ```
+>
+> </div>
+
 ### التطوير المحلي
 
 لتثبيت كمستودع محلي، أضف التالي إلى `composer.json` في تطبيق Laravel:
@@ -487,6 +498,8 @@ App::setLocale('ar');
 
 ```bash
 php artisan vendor:publish --tag=activitylog-browse-lang
+# استخدم --force لإعادة نشر الملفات المنشورة سابقاً
+php artisan vendor:publish --tag=activitylog-browse-lang --force
 ```
 
 </div>
