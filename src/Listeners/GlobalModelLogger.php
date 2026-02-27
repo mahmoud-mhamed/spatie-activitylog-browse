@@ -78,6 +78,7 @@ class GlobalModelLogger
         $excludedAttributes = $config['excluded_attributes'] ?? [];
         $logOnlyDirty = $config['log_only_dirty'] ?? true;
 
+        $excludeNulls = $config['exclude_null_on_create'] ?? false;
         $properties = [];
 
         if ($event === 'updated') {
@@ -101,6 +102,11 @@ class GlobalModelLogger
             $properties['attributes'] = $changed;
         } elseif ($event === 'created') {
             $attributes = array_diff_key($model->getAttributes(), array_flip($excludedAttributes));
+
+            if ($excludeNulls) {
+                $attributes = array_filter($attributes, fn ($value) => ! is_null($value));
+            }
+
             $properties['attributes'] = $attributes;
         } elseif ($event === 'deleted') {
             $attributes = array_diff_key($model->getAttributes(), array_flip($excludedAttributes));

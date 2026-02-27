@@ -80,8 +80,12 @@
             this.fetchPreview();
         },
 
+        get parsedDays() {
+            return this.days === '' || this.days === null ? NaN : parseInt(this.days);
+        },
+
         async fetchPreview() {
-            if (!this.days || this.days < 1) {
+            if (isNaN(this.parsedDays) || this.parsedDays < 0) {
                 this.previewCount = null;
                 return;
             }
@@ -100,9 +104,10 @@
         },
 
         showConfirm() {
-            if (!this.days || this.days < 1 || this.previewCount === null || this.previewCount === 0) return;
-            this.confirmMessage = '{{ __('activitylog-browse::messages.confirm_delete', ['count' => '__COUNT__', 'days' => '__DAYS__']) }}'
-                .replace('__COUNT__', this.previewCount).replace('__DAYS__', this.days);
+            if (isNaN(this.parsedDays) || this.parsedDays < 0 || this.previewCount === null || this.previewCount === 0) return;
+            this.confirmMessage = this.parsedDays === 0
+                ? '{{ __('activitylog-browse::messages.confirm_delete_all', ['count' => '__COUNT__']) }}'.replace('__COUNT__', this.previewCount)
+                : '{{ __('activitylog-browse::messages.confirm_delete', ['count' => '__COUNT__', 'days' => '__DAYS__']) }}'.replace('__COUNT__', this.previewCount).replace('__DAYS__', this.days);
             this.confirmModal = true;
         },
 
@@ -121,7 +126,7 @@
                         <label for="days" class="block text-sm font-medium text-gray-700 mb-1">
                             {{ __('activitylog-browse::messages.days_older_than') }}
                         </label>
-                        <input type="number" id="days" x-model="days" min="1" step="1"
+                        <input type="number" id="days" x-model="days" min="0" step="1"
                                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                placeholder="30">
                     </div>
@@ -202,7 +207,7 @@
                     {{-- Action Button --}}
                     <div class="flex gap-3">
                         <button type="button" @click="showConfirm()"
-                                :disabled="!days || days < 1 || previewCount === null || previewCount === 0"
+                                :disabled="isNaN(parsedDays) || parsedDays < 0 || previewCount === null || previewCount === 0"
                                 class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                                  stroke="currentColor" stroke-width="2">

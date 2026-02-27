@@ -38,6 +38,9 @@ return [
         ],
 
         'submit_empty_logs' => false,
+
+        // When enabled, null values will be stripped from attributes on 'created' events.
+        'exclude_null_on_create' => true,
     ],
 
     /*

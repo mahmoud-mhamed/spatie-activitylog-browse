@@ -129,6 +129,7 @@ return [
     'no_models_selected' => 'No models selected (all models will be affected)',
     'delete_logs' => 'Delete Logs',
     'confirm_delete' => 'Are you sure you want to delete :count log(s) older than :days days? This action cannot be undone.',
+    'confirm_delete_all' => 'Are you sure you want to delete ALL :count log(s)? This action cannot be undone.',
     'cleanup_success_delete' => ':count log(s) deleted successfully.',
     'cleanup_preview_count' => ':count log(s) will be affected',
     'cleanup_no_match' => 'No logs match the current filters.',

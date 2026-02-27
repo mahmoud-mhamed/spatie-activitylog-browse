@@ -657,13 +657,16 @@ class ActivityLogController extends Controller
         $this->authorize();
 
         $request->validate([
-            'days' => 'required|integer|min:1',
+            'days' => 'required|integer|min:0',
             'models' => 'nullable|array',
             'models.*' => 'string',
         ]);
 
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
-        $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
+        $days = (int) $request->input('days');
+        $query = $days === 0
+            ? $activityModel::query()
+            : $activityModel::where('created_at', '<', now()->subDays($days));
 
         if ($request->filled('models')) {
             $query->whereIn('subject_type', $request->input('models'));
@@ -677,13 +680,16 @@ class ActivityLogController extends Controller
         $this->authorize();
 
         $request->validate([
-            'days' => 'required|integer|min:1',
+            'days' => 'required|integer|min:0',
             'models' => 'nullable|array',
             'models.*' => 'string',
         ]);
 
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
-        $query = $activityModel::where('created_at', '<', now()->subDays($request->input('days')));
+        $days = (int) $request->input('days');
+        $query = $days === 0
+            ? $activityModel::query()
+            : $activityModel::where('created_at', '<', now()->subDays($days));
 
         if ($request->filled('models')) {
             $query->whereIn('subject_type', $request->input('models'));

@@ -129,6 +129,7 @@ return [
     'no_models_selected' => 'لم يتم اختيار نماذج (سيتأثر الكل)',
     'delete_logs' => 'حذف السجلات',
     'confirm_delete' => 'هل أنت متأكد من حذف :count سجل أقدم من :days يوم؟ لا يمكن التراجع عن هذا الإجراء.',
+    'confirm_delete_all' => 'هل أنت متأكد من حذف جميع السجلات (:count سجل)؟ لا يمكن التراجع عن هذا الإجراء.',
     'cleanup_success_delete' => 'تم حذف :count سجل بنجاح.',
     'cleanup_preview_count' => ':count سجل سيتأثر',
     'cleanup_no_match' => 'لا توجد سجلات مطابقة للفلاتر الحالية.',
