@@ -26,6 +26,7 @@ A Laravel package that extends [spatie/laravel-activitylog](https://github.com/s
 - [Browse UI](#browse-ui)
 - [Statistics Dashboard](#statistics-dashboard)
 - [Localization](#localization)
+- [Multi-Tenancy](#multi-tenancy)
 - [Architecture](#architecture)
 - [License](#license)
 
@@ -68,6 +69,9 @@ php artisan vendor:publish --tag=activitylog-browse-views
 
 # Language files (optional)
 php artisan vendor:publish --tag=activitylog-browse-lang
+
+# Migrations (optional — for multi-tenancy setups)
+php artisan vendor:publish --tag=activitylog-browse-migrations
 ```
 
 > **Tip:** Use `--force` to overwrite previously published files (e.g., after updating the package):
@@ -407,6 +411,46 @@ php artisan vendor:publish --tag=activitylog-browse-lang --force
 ```
 
 This copies the files to `lang/vendor/activitylog-browse/` where you can edit them or add new languages.
+
+## Multi-Tenancy
+
+This package works out of the box with [stancl/tenancy](https://tenancyforlaravel.com/) (multi-database tenancy). It automatically detects the active tenant and isolates cache keys, database connections, and migrations accordingly.
+
+### How It Works
+
+- **Cache isolation** — Cache keys are automatically prefixed with the tenant ID when a tenant is active (e.g. `activitylog-browse:t:1:stats:overview`). No shared cache between tenants.
+- **Database connection** — All queries use the connection defined on your Activity model. In a multi-database tenancy setup, the tenant's connection is used automatically.
+- **No extra dependencies** — Tenant detection uses `function_exists('tenant')`, so there's no hard dependency on any tenancy package.
+
+### Setup for Multi-Database Tenancy
+
+1. **Disable automatic migrations** so they don't run on the central database:
+
+```php
+// config/activitylog-browse.php
+'load_migrations' => false,
+```
+
+2. **Publish migrations** to your tenant migration path:
+
+```bash
+php artisan vendor:publish --tag=activitylog-browse-migrations
+```
+
+Then move the published migration(s) to your tenant migrations directory (e.g. `database/migrations/tenant/`).
+
+3. **Add tenancy middleware** to the browse UI routes:
+
+```php
+// config/activitylog-browse.php
+'browse' => [
+    'middleware' => ['web', 'auth', \Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class],
+],
+```
+
+### Without Tenancy
+
+If you're not using multi-tenancy, everything works exactly as before — no configuration changes needed.
 
 ## Architecture
 

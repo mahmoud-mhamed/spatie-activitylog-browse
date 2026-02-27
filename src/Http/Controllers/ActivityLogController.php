@@ -110,7 +110,7 @@ class ActivityLogController extends Controller
         $dateFrom = $request->filled('date_from') && strtotime($request->input('date_from')) ? $request->input('date_from') : null;
         $dateTo = $request->filled('date_to') && strtotime($request->input('date_to')) ? $request->input('date_to') : null;
 
-        $cacheKey = "activitylog-browse:stats:{$section}" . ($dateFrom ? ':f' . $dateFrom : '') . ($dateTo ? ':t' . $dateTo : '');
+        $cacheKey = $this->cachePrefix() . ":stats:{$section}" . ($dateFrom ? ':f' . $dateFrom : '') . ($dateTo ? ':t' . $dateTo : '');
         $cacheTtl = ($dateFrom || $dateTo) ? 60 : 120;
 
         return response()->json(Cache::remember($cacheKey, $cacheTtl, function () use ($section, $dateFrom, $dateTo) {
@@ -355,7 +355,7 @@ class ActivityLogController extends Controller
 
         $activityModel = ActivitylogServiceProvider::determineActivityModel();
 
-        $values = Cache::remember("activitylog-browse:{$column}", 60, function () use ($activityModel, $column) {
+        $values = Cache::remember($this->cachePrefix() . ":{$column}", 60, function () use ($activityModel, $column) {
             return $activityModel::distinct()
                 ->whereNotNull($column)
                 ->pluck($column)
@@ -716,7 +716,7 @@ class ActivityLogController extends Controller
     private function getTableInfo(\Closure $scoped): array
     {
         $table = config('activitylog.table_name', 'activity_log');
-        $connection = config('activitylog.database_connection', config('database.default'));
+        $connection = $this->getActivityConnection();
 
         $totalRows = $scoped()->count();
 
@@ -744,15 +744,22 @@ class ActivityLogController extends Controller
 
     private function clearStatsCache(): void
     {
+        $prefix = $this->cachePrefix();
+
         $sections = ['overview', 'events', 'log_names', 'models', 'causers', 'daily', 'hourly', 'weekday', 'system_user', 'attributes', 'monthly', 'peak_day'];
 
         foreach ($sections as $section) {
-            Cache::forget("activitylog-browse:stats:{$section}");
+            Cache::forget("{$prefix}:stats:{$section}");
+        }
+
+        $filterColumns = ['log_name', 'event', 'subject_type', 'causer_type'];
+        foreach ($filterColumns as $column) {
+            Cache::forget("{$prefix}:{$column}");
         }
 
         try {
             $table = config('activitylog.table_name', 'activity_log');
-            $connection = config('activitylog.database_connection', config('database.default'));
+            $connection = $this->getActivityConnection();
             DB::connection($connection)->statement("OPTIMIZE TABLE `{$table}`");
         } catch (\Throwable) {
         }
@@ -769,6 +776,22 @@ class ActivityLogController extends Controller
         session(['activitylog-browse-locale' => $locale]);
 
         return redirect()->back();
+    }
+
+    private function cachePrefix(): string
+    {
+        if (function_exists('tenant') && tenant()) {
+            return 'activitylog-browse:t:' . tenant()->getTenantKey();
+        }
+
+        return 'activitylog-browse';
+    }
+
+    private function getActivityConnection(): string
+    {
+        $model = ActivitylogServiceProvider::determineActivityModel();
+
+        return (new $model)->getConnectionName() ?? config('database.default');
     }
 
     protected function authorize(): void

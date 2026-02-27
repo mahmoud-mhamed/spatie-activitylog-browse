@@ -4,6 +4,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Load Migrations
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, the package will automatically load its migrations.
+    | Set to false if you want to publish and manage migrations yourself,
+    | for example when using multi-database tenancy (stancl/tenancy).
+    |
+    | You can publish migrations with:
+    | php artisan vendor:publish --tag=activitylog-browse-migrations
+    |
+    */
+
+    'load_migrations' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Auto-Log All Models
     |--------------------------------------------------------------------------
     |

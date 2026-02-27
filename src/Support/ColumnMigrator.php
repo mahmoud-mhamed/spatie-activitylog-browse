@@ -14,30 +14,32 @@ class ColumnMigrator
     public static function fixMorphIdColumns(): bool
     {
         $table = config('activitylog.table_name', 'activity_log');
+        $connection = config('activitylog.database_connection');
+        $schema = Schema::connection($connection);
 
-        if (! Schema::hasTable($table)) {
+        if (! $schema->hasTable($table)) {
             return false;
         }
 
         $changed = false;
 
         foreach (['subject_id', 'causer_id'] as $column) {
-            if (! Schema::hasColumn($table, $column)) {
+            if (! $schema->hasColumn($table, $column)) {
                 continue;
             }
 
-            $type = Schema::getColumnType($table, $column);
+            $type = $schema->getColumnType($table, $column);
 
             if (in_array($type, ['string', 'text', 'guid'])) {
                 continue;
             }
 
-            $driver = Schema::getConnection()->getDriverName();
+            $driver = $schema->getConnection()->getDriverName();
 
             if (in_array($driver, ['mysql', 'mariadb'])) {
-                DB::statement("ALTER TABLE `{$table}` MODIFY `{$column}` VARCHAR(36) NULL");
+                DB::connection($connection)->statement("ALTER TABLE `{$table}` MODIFY `{$column}` VARCHAR(36) NULL");
             } else {
-                Schema::table($table, function ($t) use ($column) {
+                $schema->table($table, function ($t) use ($column) {
                     $t->string($column, 36)->nullable()->change();
                 });
             }

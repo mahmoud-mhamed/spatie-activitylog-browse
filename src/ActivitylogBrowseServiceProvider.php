@@ -19,7 +19,9 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        if (config('activitylog-browse.load_migrations', true)) {
+            $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        }
         $this->publishAssets();
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'activitylog-browse');
         $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'activitylog-browse');
@@ -55,6 +57,10 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../resources/lang' => lang_path('vendor/activitylog-browse'),
             ], 'activitylog-browse-lang');
+
+            $this->publishes([
+                __DIR__ . '/../database/migrations' => database_path('migrations'),
+            ], 'activitylog-browse-migrations');
         }
     }
 

@@ -28,6 +28,7 @@
 - [واجهة التصفح](#واجهة-التصفح)
 - [لوحة الإحصائيات](#لوحة-الإحصائيات)
 - [دعم اللغات](#دعم-اللغات)
+- [تعدد المستأجرين](#تعدد-المستأجرين)
 - [البنية المعمارية](#البنية-المعمارية)
 - [الرخصة](#الرخصة)
 
@@ -84,6 +85,9 @@ php artisan vendor:publish --tag=activitylog-browse-views
 
 # ملفات اللغة (اختياري)
 php artisan vendor:publish --tag=activitylog-browse-lang
+
+# التهجيرات (اختياري — لإعدادات تعدد المستأجرين)
+php artisan vendor:publish --tag=activitylog-browse-migrations
 ```
 
 </div>
@@ -505,6 +509,58 @@ php artisan vendor:publish --tag=activitylog-browse-lang --force
 </div>
 
 هذا ينسخ الملفات إلى `lang/vendor/activitylog-browse/` حيث يمكنك تعديلها أو إضافة لغات جديدة.
+
+## تعدد المستأجرين
+
+الحزمة تعمل مباشرة مع [stancl/tenancy](https://tenancyforlaravel.com/) (تعدد المستأجرين بقواعد بيانات متعددة). تكتشف تلقائياً المستأجر النشط وتعزل مفاتيح الكاش واتصالات قاعدة البيانات والتهجيرات.
+
+### كيف تعمل
+
+- **عزل الكاش** — مفاتيح الكاش تُسبق تلقائياً بمعرف المستأجر عند وجود مستأجر نشط (مثل `activitylog-browse:t:1:stats:overview`). لا كاش مشترك بين المستأجرين.
+- **اتصال قاعدة البيانات** — جميع الاستعلامات تستخدم الاتصال المُعرّف على نموذج Activity. في إعداد تعدد قواعد البيانات، يُستخدم اتصال المستأجر تلقائياً.
+- **بدون اعتماديات إضافية** — اكتشاف المستأجر يستخدم `function_exists('tenant')`، فلا يوجد اعتماد صلب على أي حزمة tenancy.
+
+### الإعداد لتعدد قواعد البيانات
+
+1. **عطّل التهجيرات التلقائية** حتى لا تعمل على قاعدة البيانات المركزية:
+
+<div dir="ltr">
+
+```php
+// config/activitylog-browse.php
+'load_migrations' => false,
+```
+
+</div>
+
+2. **انشر التهجيرات** إلى مسار تهجيرات المستأجر:
+
+<div dir="ltr">
+
+```bash
+php artisan vendor:publish --tag=activitylog-browse-migrations
+```
+
+</div>
+
+ثم انقل التهجيرة/التهجيرات المنشورة إلى مجلد تهجيرات المستأجر (مثل `database/migrations/tenant/`).
+
+3. **أضف middleware الـ tenancy** لمسارات واجهة التصفح:
+
+<div dir="ltr">
+
+```php
+// config/activitylog-browse.php
+'browse' => [
+    'middleware' => ['web', 'auth', \Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class],
+],
+```
+
+</div>
+
+### بدون تعدد مستأجرين
+
+إذا كنت لا تستخدم تعدد المستأجرين، كل شيء يعمل كما كان — لا حاجة لأي تغيير في الإعدادات.
 
 ## البنية المعمارية
 
