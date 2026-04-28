@@ -231,6 +231,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Deletion History
+    |--------------------------------------------------------------------------
+    |
+    | Append-only JSON log file recording every cleanup / prune operation
+    | (manual or scheduled). Each entry captures the trigger, breakdown of
+    | deleted rows, duration, and configuration snapshot. Useful for auditing
+    | retention behavior and debugging unexpected deletions.
+    |
+    */
+
+    'deletion_history' => [
+        'enabled' => true,
+
+        // Storage location of the JSON file.
+        'path' => storage_path('activitylog-browse/deletion-history.json'),
+
+        // Maximum number of entries to keep (oldest are dropped first).
+        'max_entries' => 500,
+
+        // Maximum file size in MB. When exceeded, the file is reset.
+        'max_size_mb' => 3,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Browse UI
     |--------------------------------------------------------------------------
     |

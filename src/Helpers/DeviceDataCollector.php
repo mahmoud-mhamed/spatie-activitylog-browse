@@ -8,7 +8,7 @@ class DeviceDataCollector
 {
     public static function collect(): array
     {
-        if (app()->runningInConsole() && ! Request::instance()->getHost()) {
+        if (! RuntimeContext::isWebContext()) {
             return [];
         }
 

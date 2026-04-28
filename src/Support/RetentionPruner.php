@@ -21,6 +21,15 @@ class RetentionPruner
     protected int $chunkSize;
     protected bool $optimizeAfter;
 
+    protected string $trigger = 'manual';
+
+    public function setTrigger(string $trigger): self
+    {
+        $this->trigger = $trigger;
+
+        return $this;
+    }
+
     public function __construct()
     {
         $this->defaultDays   = (int) config('activitylog-browse.retention.default_days', 90);
@@ -39,6 +48,10 @@ class RetentionPruner
      */
     public function prune(bool $dryRun = false): array
     {
+        $start = microtime(true);
+        $rowsBefore = $this->newQuery()->count();
+        $sizeBefore = ActivityLogHelpers::tableSizeBytes();
+
         $byAge  = $this->pruneByAge($dryRun);
         $bySize = $this->pruneBySize($dryRun);
 
@@ -46,12 +59,78 @@ class RetentionPruner
             ActivityLogHelpers::clearStatsCache($this->optimizeAfter);
         }
 
+        $total = $byAge + $bySize;
+
+        $this->logDeletion([
+            'operation'      => 'retention',
+            'deleted_count'  => $total,
+            'breakdown'      => ['by_age' => $byAge, 'by_size' => $bySize],
+            'duration_ms'    => round((microtime(true) - $start) * 1000, 2),
+            'dry_run'        => $dryRun,
+            'rows_before'    => $rowsBefore,
+            'rows_after'     => $dryRun ? $rowsBefore : $this->newQuery()->count(),
+            'size_mb_before' => $sizeBefore !== null ? round($sizeBefore / 1048576, 2) : null,
+            'size_mb_after'  => $dryRun ? ($sizeBefore !== null ? round($sizeBefore / 1048576, 2) : null) : self::sizeMb(ActivityLogHelpers::tableSizeBytes()),
+        ], $total);
+
         return [
             'by_age'  => $byAge,
             'by_size' => $bySize,
-            'total'   => $byAge + $bySize,
+            'total'   => $total,
             'dry_run' => $dryRun,
         ];
+    }
+
+    protected function logDeletion(array $payload, int $total): void
+    {
+        if ($total === 0) {
+            return;
+        }
+
+        DeletionLogger::record(array_merge([
+            'trigger'         => $this->trigger,
+            'config_snapshot' => [
+                'default_days'    => $this->defaultDays,
+                'max_rows'        => $this->maxRows,
+                'max_size_mb'     => $this->maxSizeMb,
+                'per_model_count' => count($this->perModel),
+                'per_log_count'   => count($this->perLogName),
+                'forever_models'  => count($this->foreverModels()),
+            ],
+            'context' => self::buildContext(),
+        ], $payload));
+    }
+
+    protected static function buildContext(): array
+    {
+        $context = [];
+
+        try {
+            if (function_exists('auth') && auth()->check()) {
+                $user = auth()->user();
+                $context['user_id'] = $user->getAuthIdentifier();
+                $context['user_name'] = $user->name ?? null;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (function_exists('request') && request()->ip()) {
+                $context['ip'] = request()->ip();
+            }
+        } catch (\Throwable) {
+        }
+
+        if (app()->runningInConsole() && isset($_SERVER['argv'][1])) {
+            $context['command'] = $_SERVER['argv'][1];
+        }
+
+        return $context;
+    }
+
+    protected static function sizeMb(?int $bytes): ?float
+    {
+        return $bytes === null ? null : round($bytes / 1048576, 2);
     }
 
     /**
@@ -125,6 +204,12 @@ class RetentionPruner
      *
      * If protected records cover the whole table, the size cap becomes
      * best-effort and nothing is deleted.
+     *
+     * Implementation note: we compute the target row count up front (using
+     * avg bytes/row to translate max_size_mb into a row target) instead of
+     * re-measuring table size during the loop. InnoDB does not reclaim
+     * tablespace until OPTIMIZE TABLE runs, so information_schema would
+     * keep reporting the old size mid-loop and we'd never converge.
      */
     public function pruneBySize(bool $dryRun = false): int
     {
@@ -132,33 +217,75 @@ class RetentionPruner
             return 0;
         }
 
+        $rowsToDelete = $this->estimateRowsToDelete();
+        if ($rowsToDelete <= 0) {
+            return 0;
+        }
+
+        // Dry-run: report the realistic count, capped by what's actually eligible.
+        if ($dryRun) {
+            $eligible = $this->buildSizePruneQuery()->count();
+
+            return min($rowsToDelete, $eligible);
+        }
+
         $deleted = 0;
-        $checkSizeEvery = 10; // re-measure table size every N chunks
-        $chunkCounter = 0;
+        while ($deleted < $rowsToDelete) {
+            $remaining = $rowsToDelete - $deleted;
+            $thisChunk = min($this->chunkSize, $remaining);
 
-        while ($this->isOverLimit($chunkCounter % $checkSizeEvery === 0)) {
             $query = $this->buildSizePruneQuery();
+            $ids = (clone $query)->limit($thisChunk)->pluck('id');
 
-            $ids = (clone $query)->limit($this->chunkSize)->pluck('id');
             if ($ids->isEmpty()) {
-                // Either the table is empty, or every remaining record is
-                // protected by a per-model / per-log-name rule. Stop.
-                break;
-            }
-
-            if ($dryRun) {
-                $deleted += $ids->count();
-                // In dry-run we can't actually shrink the table, so stop after
-                // estimating one chunk worth — otherwise infinite loop.
+                // Either nothing left, or every remaining record is protected
+                // by a per-model / per-log-name rule. Stop — size cap becomes
+                // best-effort.
                 break;
             }
 
             set_time_limit(30);
             $deleted += $this->newQuery()->whereIn('id', $ids)->delete();
-            $chunkCounter++;
         }
 
         return $deleted;
+    }
+
+    /**
+     * Compute how many rows to delete so the table fits both caps.
+     */
+    protected function estimateRowsToDelete(): int
+    {
+        $currentRows = $this->newQuery()->count();
+        if ($currentRows <= 0) {
+            return 0;
+        }
+
+        $targets = [];
+
+        if ($this->maxRows !== null) {
+            $targets[] = (int) $this->maxRows;
+        }
+
+        if ($this->maxSizeMb !== null) {
+            $bytes = ActivityLogHelpers::tableSizeBytes();
+            if ($bytes !== null && $bytes > 0) {
+                $avgBytesPerRow = $bytes / $currentRows;
+                $targetBytes = $this->maxSizeMb * 1024 * 1024;
+                if ($avgBytesPerRow > 0) {
+                    $targets[] = (int) floor($targetBytes / $avgBytesPerRow);
+                }
+            }
+        }
+
+        if (empty($targets)) {
+            return 0;
+        }
+
+        // Stricter cap wins.
+        $targetRows = max(0, min($targets));
+
+        return max(0, $currentRows - $targetRows);
     }
 
     /**
@@ -207,25 +334,6 @@ class RetentionPruner
         }
 
         return $query;
-    }
-
-    protected function isOverLimit(bool $remeasureSize): bool
-    {
-        if ($this->maxRows !== null) {
-            $rows = $this->newQuery()->count();
-            if ($rows > $this->maxRows) {
-                return true;
-            }
-        }
-
-        if ($this->maxSizeMb !== null && $remeasureSize) {
-            $bytes = ActivityLogHelpers::tableSizeBytes();
-            if ($bytes !== null && $bytes > $this->maxSizeMb * 1024 * 1024) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected function executeDelete(Builder $query, bool $dryRun): int

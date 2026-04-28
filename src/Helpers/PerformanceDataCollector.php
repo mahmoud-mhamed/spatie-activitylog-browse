@@ -2,14 +2,11 @@
 
 namespace Mhamed\SpatieActivitylogBrowse\Helpers;
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Request;
-
 class PerformanceDataCollector
 {
     public static function collect(): array
     {
-        if (app()->runningInConsole() && ! Request::instance()->getHost()) {
+        if (! RuntimeContext::isWebContext()) {
             return [];
         }
 
@@ -33,11 +30,7 @@ class PerformanceDataCollector
         }
 
         if ($fields['db_query_count'] ?? false) {
-            try {
-                $data['db_query_count'] = count(DB::getQueryLog());
-            } catch (\Throwable) {
-                // Query log may not be enabled
-            }
+            $data['db_query_count'] = QueryCounter::count();
         }
 
         return $data ? ['performance_data' => $data] : [];

@@ -28,6 +28,8 @@ Route::middleware(array_merge($middleware, [SetLocale::class, RequirePassword::c
         Route::get('/cleanup/preview', [ActivityLogController::class, 'cleanupPreview'])->name('activitylog-browse.cleanup-preview');
         Route::delete('/cleanup/delete', [ActivityLogController::class, 'cleanupDelete'])->name('activitylog-browse.cleanup-delete');
         Route::post('/cleanup/retention/run', [ActivityLogController::class, 'cleanupRunRetention'])->name('activitylog-browse.cleanup-retention');
+        Route::get('/deletion-history', [ActivityLogController::class, 'deletionHistory'])->name('activitylog-browse.deletion-history');
+        Route::delete('/deletion-history', [ActivityLogController::class, 'clearDeletionHistory'])->name('activitylog-browse.clear-deletion-history');
         Route::get('/{activity}/attributes', [ActivityLogController::class, 'subjectAttributes'])->name('activitylog-browse.subject-attributes');
         Route::get('/{activity}/causer-attributes', [ActivityLogController::class, 'causerAttributes'])->name('activitylog-browse.causer-attributes');
         Route::get('/{activity}/related/{relation}', [ActivityLogController::class, 'relatedLogs'])->name('activitylog-browse.related-logs');

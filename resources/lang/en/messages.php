@@ -219,6 +219,25 @@ return [
     'theme_dark' => 'Dark mode',
     'theme_light' => 'Light mode',
 
+    // Deletion history
+    'deletion_history' => 'Deletion History',
+    'deletion_history_title' => 'Deletion History',
+    'deletion_history_hint' => 'Audit log of every cleanup / prune operation. Stored as a JSON file at the path below.',
+    'deletion_history_total_entries' => 'Total Entries',
+    'deletion_history_max' => 'max',
+    'deletion_history_file_size' => 'File Size',
+    'deletion_history_file_path' => 'File Path',
+    'deletion_history_empty' => 'No deletions have been recorded yet.',
+    'deletion_history_when' => 'When',
+    'deletion_history_trigger' => 'Trigger',
+    'deletion_history_operation' => 'Operation',
+    'deletion_history_deleted' => 'Deleted',
+    'deletion_history_duration' => 'Duration',
+    'deletion_history_user' => 'User / Source',
+    'deletion_history_clear' => 'Clear History',
+    'deletion_history_clear_confirm' => 'This will permanently delete the deletion-history.json file. Continue?',
+    'deletion_history_cleared' => 'Deletion history cleared successfully.',
+
     // Retention priority hierarchy
     'retention_priority_title' => 'Rule priority (strongest → weakest)',
     'retention_priority_1' => 'Always wins. \'forever\' is fully protected; an int day count protects records younger than the configured days from BOTH age and size pruning.',

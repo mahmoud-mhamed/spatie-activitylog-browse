@@ -26,6 +26,10 @@ class PruneCommand extends Command
         $onlyAge = (bool) $this->option('age');
         $onlySize = (bool) $this->option('size');
 
+        $isScheduled = app()->bound(\Illuminate\Console\Scheduling\Schedule::class)
+            && in_array('schedule:run', (array) ($_SERVER['argv'] ?? []), true);
+        $pruner->setTrigger($isScheduled ? 'schedule' : 'cli');
+
         $this->info($dryRun ? 'Dry run — no rows will be deleted.' : 'Pruning activity log...');
 
         $byAge = 0;

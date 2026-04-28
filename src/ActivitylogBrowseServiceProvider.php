@@ -7,6 +7,7 @@ use Illuminate\Support\ServiceProvider;
 use Spatie\Activitylog\ActivitylogServiceProvider;
 use Mhamed\SpatieActivitylogBrowse\Console\InstallCommand;
 use Mhamed\SpatieActivitylogBrowse\Console\PruneCommand;
+use Mhamed\SpatieActivitylogBrowse\Helpers\QueryCounter;
 use Mhamed\SpatieActivitylogBrowse\Listeners\GlobalModelLogger;
 use Mhamed\SpatieActivitylogBrowse\Observers\ActivityEnrichmentObserver;
 
@@ -34,6 +35,11 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
 
         if ($this->isEnrichmentEnabled()) {
             $this->registerEnrichmentObserver();
+        }
+
+        if (config('activitylog-browse.performance_data.enabled')
+            && (config('activitylog-browse.performance_data.fields.db_query_count') ?? false)) {
+            QueryCounter::register();
         }
 
         if (config('activitylog-browse.browse.enabled')) {

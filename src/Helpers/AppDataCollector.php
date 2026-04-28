@@ -2,13 +2,13 @@
 
 namespace Mhamed\SpatieActivitylogBrowse\Helpers;
 
-use Illuminate\Support\Facades\Request;
-
 class AppDataCollector
 {
+    private static ?string $cachedEnv = null;
+
     public static function collect(): array
     {
-        if (app()->runningInConsole() && ! Request::instance()->getHost()) {
+        if (! RuntimeContext::isWebContext()) {
             return [];
         }
 
@@ -22,7 +22,7 @@ class AppDataCollector
         $data = [];
 
         if ($fields['environment'] ?? false) {
-            $data['environment'] = app()->environment();
+            $data['environment'] = self::$cachedEnv ??= app()->environment();
         }
 
         if ($fields['php_version'] ?? false) {
@@ -30,9 +30,14 @@ class AppDataCollector
         }
 
         if ($fields['server_hostname'] ?? false) {
-            $data['server_hostname'] = gethostname() ?: 'unknown';
+            $data['server_hostname'] = RuntimeContext::hostname();
         }
 
         return $data ? ['app_data' => $data] : [];
+    }
+
+    public static function resetCache(): void
+    {
+        self::$cachedEnv = null;
     }
 }

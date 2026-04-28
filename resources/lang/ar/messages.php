@@ -219,6 +219,25 @@ return [
     'theme_dark' => 'الوضع الداكن',
     'theme_light' => 'الوضع الفاتح',
 
+    // Deletion history
+    'deletion_history' => 'سجل الحذف',
+    'deletion_history_title' => 'سجل عمليات الحذف',
+    'deletion_history_hint' => 'سجل تدقيقي بكل عمليات التنظيف. مخزّن كملف JSON في المسار الموضّح بالأسفل.',
+    'deletion_history_total_entries' => 'إجمالي السجلات',
+    'deletion_history_max' => 'الحد الأقصى',
+    'deletion_history_file_size' => 'حجم الملف',
+    'deletion_history_file_path' => 'مسار الملف',
+    'deletion_history_empty' => 'لا توجد عمليات حذف مسجّلة حتى الآن.',
+    'deletion_history_when' => 'الوقت',
+    'deletion_history_trigger' => 'المصدر',
+    'deletion_history_operation' => 'العملية',
+    'deletion_history_deleted' => 'المحذوف',
+    'deletion_history_duration' => 'المدة',
+    'deletion_history_user' => 'المستخدم / المصدر',
+    'deletion_history_clear' => 'مسح السجل',
+    'deletion_history_clear_confirm' => 'سيتم حذف ملف deletion-history.json نهائياً. هل تريد المتابعة؟',
+    'deletion_history_cleared' => 'تم مسح سجل الحذف بنجاح.',
+
     // Retention priority hierarchy
     'retention_priority_title' => 'ترتيب أولوية القواعد (الأقوى ← الأضعف)',
     'retention_priority_1' => 'دايماً بتغلب. "forever" محميّ بالكامل، وعدد الأيام بيحمي السجلات اللي لسه أحدث من المدة المحددة من الحذف بالعمر والحجم سوا.',

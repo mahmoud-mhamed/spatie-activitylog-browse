@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Gate;
 use Mhamed\SpatieActivitylogBrowse\Helpers\RelationDiscovery;
 use Mhamed\SpatieActivitylogBrowse\Http\Middleware\RequirePassword;
 use Mhamed\SpatieActivitylogBrowse\Support\ActivityLogHelpers;
+use Mhamed\SpatieActivitylogBrowse\Support\DeletionLogger;
 use Mhamed\SpatieActivitylogBrowse\Support\RetentionPruner;
 use Spatie\Activitylog\ActivitylogServiceProvider;
 use Symfony\Component\HttpFoundation\Response;
@@ -786,6 +787,38 @@ class ActivityLogController extends Controller
         ));
     }
 
+    public function deletionHistory(Request $request)
+    {
+        $this->authorize();
+
+        $page = (int) $request->input('page', 1);
+        $perPage = 25;
+        $data = DeletionLogger::paginate($page, $perPage);
+
+        return view('activitylog-browse::deletion-history', [
+            'entries'     => $data['entries'],
+            'total'       => $data['total'],
+            'page'        => $data['page'],
+            'perPage'     => $data['per_page'],
+            'lastPage'    => $data['last_page'],
+            'fileSize'    => DeletionLogger::size(),
+            'maxSize'     => DeletionLogger::maxSizeBytes(),
+            'enabled'     => DeletionLogger::enabled(),
+            'maxEntries'  => (int) config('activitylog-browse.deletion_history.max_entries', 500),
+            'filePath'    => DeletionLogger::path(),
+        ]);
+    }
+
+    public function clearDeletionHistory()
+    {
+        $this->authorize();
+
+        DeletionLogger::clear();
+
+        return redirect()->route('activitylog-browse.deletion-history')
+            ->with('success', __('activitylog-browse::messages.deletion_history_cleared'));
+    }
+
     public function cleanupRunRetention(RetentionPruner $pruner)
     {
         $this->authorize();
@@ -795,7 +828,7 @@ class ActivityLogController extends Controller
                 ->with('error', __('activitylog-browse::messages.retention_disabled'));
         }
 
-        $result = $pruner->prune();
+        $result = $pruner->setTrigger('ui')->prune();
 
         return redirect()->route('activitylog-browse.cleanup')
             ->with('success', __('activitylog-browse::messages.retention_success', [
@@ -848,6 +881,10 @@ class ActivityLogController extends Controller
             $query->whereIn('subject_type', $request->input('models'));
         }
 
+        $start = microtime(true);
+        $rowsBefore = $activityModel::query()->count();
+        $sizeBefore = ActivityLogHelpers::tableSizeBytes();
+
         $count = 0;
         do {
             set_time_limit(30);
@@ -861,8 +898,37 @@ class ActivityLogController extends Controller
 
         $this->clearStatsCache();
 
+        if ($count > 0) {
+            \Mhamed\SpatieActivitylogBrowse\Support\DeletionLogger::record([
+                'operation'      => 'manual_cleanup',
+                'trigger'        => 'ui',
+                'deleted_count'  => $count,
+                'breakdown'      => ['by_age' => $count, 'by_size' => 0],
+                'duration_ms'    => round((microtime(true) - $start) * 1000, 2),
+                'dry_run'        => false,
+                'rows_before'    => $rowsBefore,
+                'rows_after'     => $activityModel::query()->count(),
+                'size_mb_before' => $sizeBefore !== null ? round($sizeBefore / 1048576, 2) : null,
+                'size_mb_after'  => self::sizeMb(ActivityLogHelpers::tableSizeBytes()),
+                'filters'        => [
+                    'days'   => $days,
+                    'models' => (array) $request->input('models', []),
+                ],
+                'context' => [
+                    'user_id'   => auth()->id(),
+                    'user_name' => optional(auth()->user())->name,
+                    'ip'        => $request->ip(),
+                ],
+            ]);
+        }
+
         return redirect()->route('activitylog-browse.cleanup')
             ->with('success', __('activitylog-browse::messages.cleanup_success_delete', ['count' => $count]));
+    }
+
+    protected static function sizeMb(?int $bytes): ?float
+    {
+        return $bytes === null ? null : round($bytes / 1048576, 2);
     }
 
 
