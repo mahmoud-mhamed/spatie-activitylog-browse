@@ -32,28 +32,17 @@ class PruneCommand extends Command
 
         $this->info($dryRun ? 'Dry run — no rows will be deleted.' : 'Pruning activity log...');
 
-        $byAge = 0;
-        $bySize = 0;
+        // skipAge => --size only ; skipSize => --age only
+        $result = $pruner->prune($dryRun, skipAge: $onlySize, skipSize: $onlyAge);
 
         if (! $onlySize) {
-            $byAge = $pruner->pruneByAge($dryRun);
-            $this->line("  By age:  {$byAge} rows");
+            $this->line("  By age:  {$result['by_age']} rows");
         }
-
         if (! $onlyAge) {
-            $bySize = $pruner->pruneBySize($dryRun);
-            $this->line("  By size: {$bySize} rows");
+            $this->line("  By size: {$result['by_size']} rows");
         }
 
-        $total = $byAge + $bySize;
-
-        if (! $dryRun && $total > 0) {
-            \Mhamed\SpatieActivitylogBrowse\Support\ActivityLogHelpers::clearStatsCache(
-                (bool) config('activitylog-browse.retention.optimize_after', true)
-            );
-        }
-
-        $this->info("Done. Total: {$total} rows" . ($dryRun ? ' (dry run)' : ''));
+        $this->info("Done. Total: {$result['total']} rows" . ($dryRun ? ' (dry run)' : ''));
 
         return self::SUCCESS;
     }

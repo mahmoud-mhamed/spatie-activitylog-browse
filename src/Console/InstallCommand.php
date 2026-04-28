@@ -37,11 +37,33 @@ class InstallCommand extends Command
             }
         }
 
-        // Publish our config
+        // Publish our config (force-overwrite if it already exists so new
+        // sections like `retention` and `deletion_history` get added).
         $this->info('Publishing activitylog-browse config...');
-        $this->call('vendor:publish', [
+        $configPath = config_path('activitylog-browse.php');
+        $configExists = file_exists($configPath);
+        $force = false;
+
+        if ($configExists) {
+            $this->warn('  Config file already exists at: ' . $configPath);
+            $force = $this->confirm(
+                '  Overwrite with the latest config (recommended to get new options like retention / deletion_history)?',
+                true
+            );
+        }
+
+        $this->call('vendor:publish', array_filter([
             '--tag' => 'activitylog-browse-config',
-        ]);
+            '--force' => $force ? true : null,
+        ]));
+
+        if ($configExists && ! $force) {
+            $this->warn('  Config not overwritten. New options will fall back to package defaults.');
+            $this->line('  To merge manually, compare your config with: vendor/mhamed/spatie-activitylog-browse/config/activitylog-browse.php');
+        }
+
+        // Ensure storage directory + .gitignore for deletion history
+        $this->ensureDeletionHistoryStorage();
 
         // Fix morph ID columns to support UUIDs
         $this->info('Ensuring morph ID columns support UUID format...');
@@ -60,6 +82,37 @@ class InstallCommand extends Command
         $this->info('Visit /' . config('activitylog-browse.browse.prefix', 'activity-log') . ' to browse your logs.');
 
         return self::SUCCESS;
+    }
+
+    protected function ensureDeletionHistoryStorage(): void
+    {
+        $this->info('Setting up deletion history storage...');
+
+        $path = (string) config(
+            'activitylog-browse.deletion_history.path',
+            storage_path('activitylog-browse/deletion-history.json')
+        );
+        $dir = dirname($path);
+
+        if (! is_dir($dir)) {
+            if (@mkdir($dir, 0775, true) || is_dir($dir)) {
+                $this->info("  Created directory: {$dir}");
+            } else {
+                $this->warn("  Could not create directory: {$dir}");
+                return;
+            }
+        } else {
+            $this->line("  Directory already exists: {$dir}");
+        }
+
+        $gitignore = $dir . DIRECTORY_SEPARATOR . '.gitignore';
+        if (! is_file($gitignore)) {
+            if (@file_put_contents($gitignore, "*\n!.gitignore\n") !== false) {
+                $this->info('  Added .gitignore to ignore the deletion-history.json file.');
+            }
+        } else {
+            $this->line('  .gitignore already present.');
+        }
     }
 
     protected function ensureMissingColumns(?string $connection, string $tableName): void

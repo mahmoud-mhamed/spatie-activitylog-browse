@@ -46,14 +46,14 @@ class RetentionPruner
      *
      * @return array{by_age:int, by_size:int, total:int, dry_run:bool}
      */
-    public function prune(bool $dryRun = false): array
+    public function prune(bool $dryRun = false, bool $skipAge = false, bool $skipSize = false): array
     {
         $start = microtime(true);
         $rowsBefore = $this->newQuery()->count();
         $sizeBefore = ActivityLogHelpers::tableSizeBytes();
 
-        $byAge  = $this->pruneByAge($dryRun);
-        $bySize = $this->pruneBySize($dryRun);
+        $byAge  = $skipAge  ? 0 : $this->pruneByAge($dryRun);
+        $bySize = $skipSize ? 0 : $this->pruneBySize($dryRun);
 
         if (! $dryRun && ($byAge > 0 || $bySize > 0)) {
             ActivityLogHelpers::clearStatsCache($this->optimizeAfter);
@@ -61,8 +61,14 @@ class RetentionPruner
 
         $total = $byAge + $bySize;
 
+        $operation = match (true) {
+            $skipAge && ! $skipSize => 'retention_size',
+            $skipSize && ! $skipAge => 'retention_age',
+            default                 => 'retention',
+        };
+
         $this->logDeletion([
-            'operation'      => 'retention',
+            'operation'      => $operation,
             'deleted_count'  => $total,
             'breakdown'      => ['by_age' => $byAge, 'by_size' => $bySize],
             'duration_ms'    => round((microtime(true) - $start) * 1000, 2),

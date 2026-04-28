@@ -232,6 +232,7 @@ return [
     'deletion_history_trigger' => 'Trigger',
     'deletion_history_operation' => 'Operation',
     'deletion_history_deleted' => 'Deleted',
+    'deletion_history_size' => 'Size (MB)',
     'deletion_history_duration' => 'Duration',
     'deletion_history_user' => 'User / Source',
     'deletion_history_clear' => 'Clear History',

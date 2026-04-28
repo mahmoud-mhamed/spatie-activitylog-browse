@@ -232,6 +232,7 @@ return [
     'deletion_history_trigger' => 'المصدر',
     'deletion_history_operation' => 'العملية',
     'deletion_history_deleted' => 'المحذوف',
+    'deletion_history_size' => 'الحجم (MB)',
     'deletion_history_duration' => 'المدة',
     'deletion_history_user' => 'المستخدم / المصدر',
     'deletion_history_clear' => 'مسح السجل',

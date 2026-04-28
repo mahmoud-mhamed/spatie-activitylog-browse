@@ -78,24 +78,25 @@
                             <th class="py-2 px-3 text-start font-semibold">{{ __('activitylog-browse::messages.deletion_history_trigger') }}</th>
                             <th class="py-2 px-3 text-start font-semibold">{{ __('activitylog-browse::messages.deletion_history_operation') }}</th>
                             <th class="py-2 px-3 text-end font-semibold">{{ __('activitylog-browse::messages.deletion_history_deleted') }}</th>
+                            <th class="py-2 px-3 text-end font-semibold">{{ __('activitylog-browse::messages.deletion_history_size') }}</th>
                             <th class="py-2 px-3 text-end font-semibold">{{ __('activitylog-browse::messages.deletion_history_duration') }}</th>
                             <th class="py-2 px-3 text-start font-semibold">{{ __('activitylog-browse::messages.deletion_history_user') }}</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100">
-                        @foreach($entries as $entry)
-                            @php
-                                $trigger = $entry['trigger'] ?? 'manual';
-                                $isDryRun = (bool) ($entry['dry_run'] ?? false);
-                                $triggerColors = [
-                                    'schedule' => 'bg-blue-100 text-blue-700',
-                                    'cli'      => 'bg-purple-100 text-purple-700',
-                                    'ui'       => 'bg-green-100 text-green-700',
-                                    'manual'   => 'bg-gray-100 text-gray-700',
-                                ];
-                                $triggerColor = $triggerColors[$trigger] ?? 'bg-gray-100 text-gray-700';
-                            @endphp
-                            <tr x-data="{ open: false }">
+                    @foreach($entries as $entry)
+                        @php
+                            $trigger = $entry['trigger'] ?? 'manual';
+                            $isDryRun = (bool) ($entry['dry_run'] ?? false);
+                            $triggerColors = [
+                                'schedule' => 'bg-blue-100 text-blue-700',
+                                'cli'      => 'bg-purple-100 text-purple-700',
+                                'ui'       => 'bg-green-100 text-green-700',
+                                'manual'   => 'bg-gray-100 text-gray-700',
+                            ];
+                            $triggerColor = $triggerColors[$trigger] ?? 'bg-gray-100 text-gray-700';
+                        @endphp
+                        <tbody class="divide-y divide-gray-100 border-t border-gray-100" x-data="{ open: false }">
+                            <tr>
                                 <td class="py-2 px-3 align-top">
                                     <button type="button" @click="open = !open" class="text-gray-400 hover:text-gray-700">
                                         <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-90': open }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -129,6 +130,26 @@
                                         </div>
                                     @endif
                                 </td>
+                                <td class="py-2 px-3 align-top text-end whitespace-nowrap">
+                                    @php
+                                        $sizeBefore = $entry['size_mb_before'] ?? null;
+                                        $sizeAfter  = $entry['size_mb_after'] ?? null;
+                                        $diff = ($sizeBefore !== null && $sizeAfter !== null) ? round($sizeBefore - $sizeAfter, 2) : null;
+                                    @endphp
+                                    @if($sizeBefore !== null && $sizeAfter !== null)
+                                        <div class="font-mono text-xs text-gray-700">
+                                            {{ number_format($sizeBefore, 2) }}
+                                            <span class="text-gray-400 mx-0.5">→</span>
+                                            {{ number_format($sizeAfter, 2) }}
+                                            <span class="text-gray-400">MB</span>
+                                        </div>
+                                        @if($diff !== null && $diff > 0)
+                                            <div class="text-[10px] font-mono text-green-700">−{{ number_format($diff, 2) }} MB</div>
+                                        @endif
+                                    @else
+                                        <span class="text-gray-300">—</span>
+                                    @endif
+                                </td>
                                 <td class="py-2 px-3 align-top text-end font-mono text-xs text-gray-600">
                                     {{ number_format($entry['duration_ms'] ?? 0, 1) }} ms
                                 </td>
@@ -146,12 +167,12 @@
                             </tr>
                             <tr x-show="open" x-cloak>
                                 <td></td>
-                                <td colspan="6" class="bg-gray-50 dark:bg-gray-900 p-3">
+                                <td colspan="7" class="bg-gray-50 dark:bg-gray-900 p-3">
                                     <pre class="text-[11px] font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ json_encode($entry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
                                 </td>
                             </tr>
-                        @endforeach
-                    </tbody>
+                        </tbody>
+                    @endforeach
                 </table>
             </div>
         </div>
