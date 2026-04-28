@@ -4,6 +4,12 @@ namespace Mhamed\SpatieActivitylogBrowse\Helpers;
 
 class ExecutionContextCollector
 {
+    private static ?string $cachedSource = null;
+    private static ?string $cachedJobName = null;
+    private static bool $jobNameDetected = false;
+    private static ?string $cachedCommandName = null;
+    private static bool $commandNameDetected = false;
+
     public static function collect(): array
     {
         $config = config('activitylog-browse.execution_context');
@@ -16,11 +22,11 @@ class ExecutionContextCollector
         $data = [];
 
         if ($fields['source'] ?? false) {
-            $data['source'] = static::detectSource();
+            $data['source'] = self::source();
         }
 
         if ($fields['job_name'] ?? false) {
-            $jobName = static::detectJobName();
+            $jobName = self::jobName();
 
             if ($jobName) {
                 $data['job_name'] = $jobName;
@@ -28,45 +34,85 @@ class ExecutionContextCollector
         }
 
         if ($fields['command_name'] ?? false) {
-            if (app()->runningInConsole() && isset($_SERVER['argv'][1])) {
-                $data['command_name'] = $_SERVER['argv'][1];
+            $cmd = self::commandName();
+            if ($cmd) {
+                $data['command_name'] = $cmd;
             }
         }
 
         return $data ? ['execution_context' => $data] : [];
     }
 
-    protected static function detectSource(): string
+    public static function resetCache(): void
     {
-        if (app()->runningInConsole()) {
-            if (static::detectJobName()) {
-                return 'queue';
-            }
-
-            if (class_exists(\Illuminate\Console\Scheduling\Schedule::class) && app()->bound(\Illuminate\Console\Scheduling\Schedule::class)) {
-                return 'schedule';
-            }
-
-            return 'console';
-        }
-
-        return 'web';
+        self::$cachedSource = null;
+        self::$cachedJobName = null;
+        self::$jobNameDetected = false;
+        self::$cachedCommandName = null;
+        self::$commandNameDetected = false;
     }
 
-    protected static function detectJobName(): ?string
+    protected static function source(): string
     {
+        if (self::$cachedSource !== null) {
+            return self::$cachedSource;
+        }
+
+        if (! app()->runningInConsole()) {
+            return self::$cachedSource = 'web';
+        }
+
+        if (self::jobName()) {
+            return self::$cachedSource = 'queue';
+        }
+
+        if (class_exists(\Illuminate\Console\Scheduling\Schedule::class)
+            && app()->bound(\Illuminate\Console\Scheduling\Schedule::class)) {
+            return self::$cachedSource = 'schedule';
+        }
+
+        return self::$cachedSource = 'console';
+    }
+
+    protected static function jobName(): ?string
+    {
+        if (self::$jobNameDetected) {
+            return self::$cachedJobName;
+        }
+
+        self::$jobNameDetected = true;
+
+        if (! app()->runningInConsole()) {
+            return self::$cachedJobName = null;
+        }
+
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 30);
 
         foreach ($trace as $frame) {
             if (isset($frame['class']) && is_a($frame['class'], \Illuminate\Contracts\Queue\Job::class, true) && ($frame['function'] ?? '') === 'fire') {
-                return $frame['class'];
+                return self::$cachedJobName = $frame['class'];
             }
 
             if (isset($frame['class']) && is_a($frame['class'], \Illuminate\Contracts\Queue\ShouldQueue::class, true) && ($frame['function'] ?? '') === 'handle') {
-                return $frame['class'];
+                return self::$cachedJobName = $frame['class'];
             }
         }
 
-        return null;
+        return self::$cachedJobName = null;
+    }
+
+    protected static function commandName(): ?string
+    {
+        if (self::$commandNameDetected) {
+            return self::$cachedCommandName;
+        }
+
+        self::$commandNameDetected = true;
+
+        if (app()->runningInConsole() && isset($_SERVER['argv'][1])) {
+            return self::$cachedCommandName = $_SERVER['argv'][1];
+        }
+
+        return self::$cachedCommandName = null;
     }
 }

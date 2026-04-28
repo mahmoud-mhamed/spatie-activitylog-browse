@@ -14,6 +14,12 @@ class GlobalModelLogger
 
     protected bool $isLogging = false;
 
+    /** @var array<string, bool> Per-class cache for shouldLog() decisions. */
+    protected array $shouldLogCache = [];
+
+    /** @var class-string|null */
+    protected ?string $activityModelClass = null;
+
     public function register(): void
     {
         $events = config('activitylog-browse.auto_log.events', ['created', 'updated', 'deleted']);
@@ -45,27 +51,39 @@ class GlobalModelLogger
 
     protected function shouldLog(Model $model): bool
     {
-        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+        $class = get_class($model);
+
+        if (array_key_exists($class, $this->shouldLogCache)) {
+            return $this->shouldLogCache[$class];
+        }
+
+        return $this->shouldLogCache[$class] = $this->resolveShouldLog($model, $class);
+    }
+
+    protected function resolveShouldLog(Model $model, string $class): bool
+    {
+        $activityModel = $this->activityModelClass
+            ??= ActivitylogServiceProvider::determineActivityModel();
 
         if ($model instanceof $activityModel) {
             return false;
         }
 
-        if (in_array(LogsActivity::class, class_uses_recursive($model))) {
+        if (in_array(LogsActivity::class, class_uses_recursive($class))) {
             return false;
         }
 
         $models = config('activitylog-browse.auto_log.models', '*');
 
         if ($models !== '*') {
-            if (! in_array(get_class($model), (array) $models)) {
+            if (! in_array($class, (array) $models)) {
                 return false;
             }
         }
 
         $excluded = config('activitylog-browse.auto_log.excluded_models', []);
 
-        if (in_array(get_class($model), $excluded)) {
+        if (in_array($class, $excluded)) {
             return false;
         }
 

@@ -45,6 +45,10 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
 
     protected function registerRetentionSchedule(): void
     {
+        if (! $this->app->runningInConsole()) {
+            return;
+        }
+
         if (! config('activitylog-browse.retention.enabled', false)) {
             return;
         }
