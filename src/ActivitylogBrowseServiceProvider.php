@@ -2,9 +2,11 @@
 
 namespace Mhamed\SpatieActivitylogBrowse;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Activitylog\ActivitylogServiceProvider;
 use Mhamed\SpatieActivitylogBrowse\Console\InstallCommand;
+use Mhamed\SpatieActivitylogBrowse\Console\PruneCommand;
 use Mhamed\SpatieActivitylogBrowse\Listeners\GlobalModelLogger;
 use Mhamed\SpatieActivitylogBrowse\Observers\ActivityEnrichmentObserver;
 
@@ -37,6 +39,39 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
         if (config('activitylog-browse.browse.enabled')) {
             $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
         }
+
+        $this->registerRetentionSchedule();
+    }
+
+    protected function registerRetentionSchedule(): void
+    {
+        if (! config('activitylog-browse.retention.enabled', false)) {
+            return;
+        }
+
+        $frequency = config('activitylog-browse.retention.schedule');
+        if (! $frequency) {
+            return;
+        }
+
+        $time = (string) config('activitylog-browse.retention.schedule_time', '03:00');
+        if (! preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+            $time = '03:00';
+        }
+
+        $this->app->booted(function () use ($frequency, $time) {
+            $schedule = $this->app->make(Schedule::class);
+            $event = $schedule->command('activitylog-browse:prune');
+
+            match ($frequency) {
+                'daily'   => $event->dailyAt($time),
+                'weekly'  => $event->weeklyOn(0, $time),
+                'monthly' => $event->monthlyOn(1, $time),
+                default   => null,
+            };
+
+            $event->withoutOverlapping()->runInBackground();
+        });
     }
 
     protected function publishAssets(): void
@@ -44,6 +79,7 @@ class ActivitylogBrowseServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallCommand::class,
+                PruneCommand::class,
             ]);
 
             $this->publishes([

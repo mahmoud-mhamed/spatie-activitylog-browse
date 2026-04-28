@@ -180,6 +180,57 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Retention / Auto-Cleanup
+    |--------------------------------------------------------------------------
+    |
+    | Automatically prune old activity log entries based on age and table
+    | size limits. Per-model overrides allow specific models to be retained
+    | longer (or forever).
+    |
+    */
+
+    'retention' => [
+        'enabled' => false,
+
+        // Records older than this many days are deleted (default for all models).
+        'default_days' => 90,
+
+        // Hard caps on table size. When exceeded, oldest records are deleted
+        // first until both limits are satisfied. Set to null to disable.
+        'max_rows' => null,
+        'max_size_mb' => null,
+
+        // Per-model overrides. Value is days (int) or 'forever' to never delete.
+        // 'per_model' => [
+        //     App\Models\AuditLog::class => 'forever',
+        //     App\Models\User::class     => 365,
+        // ],
+        'per_model' => [],
+
+        // Per-log-name overrides (days or 'forever').
+        // 'per_log_name' => [
+        //     'security' => 365,
+        // ],
+        'per_log_name' => [],
+
+        // Number of rows deleted per chunk to avoid long table locks.
+        'chunk_size' => 1000,
+
+        // Run OPTIMIZE TABLE after pruning to reclaim disk space.
+        'optimize_after' => true,
+
+        // Automatic schedule frequency: 'daily', 'weekly', 'monthly' or null.
+        // 'daily'   = every day at the configured time
+        // 'weekly'  = every Sunday (start of week) at the configured time
+        // 'monthly' = the 1st of each month at the configured time
+        'schedule' => 'daily',
+
+        // Time of day the schedule runs, in 24-hour HH:MM format.
+        'schedule_time' => '03:00',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Browse UI
     |--------------------------------------------------------------------------
     |
@@ -198,6 +249,11 @@ return [
 
         // Gate name to authorize access. Set to null to allow all authenticated users.
         'gate' => null,
+
+        // Optional standalone password gate. When set, users must enter this
+        // password (in addition to the configured middleware) before browsing.
+        // Set to null/empty to disable.
+        'password' => env('ACTIVITYLOG_BROWSE_PASSWORD'),
 
         // Available locales for the language switch button.
         'available_locales' => ['en', 'ar'],

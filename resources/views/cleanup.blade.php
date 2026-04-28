@@ -20,6 +20,12 @@
         </div>
     @endif
 
+    @if(session('error'))
+        <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            {{ session('error') }}
+        </div>
+    @endif
+
     {{-- Overview Cards --}}
     <div class="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4" x-data="{
         formatSize(bytes) {
@@ -35,6 +41,141 @@
         @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_oldest_entry'), 'value' => $oldestEntry ? $oldestEntry->format('Y-m-d') : '—', 'size' => 'text-sm'])
         @include('activitylog-browse::partials.stat-card', ['label' => __('activitylog-browse::messages.cleanup_newest_entry'), 'value' => $newestEntry ? $newestEntry->format('Y-m-d') : '—', 'size' => 'text-sm'])
     </div>
+
+    {{-- Retention Settings --}}
+    @php
+        $retentionEnabled = (bool) ($retention['enabled'] ?? false);
+        $perModelRules = (array) ($retention['per_model'] ?? []);
+        $perLogNameRules = (array) ($retention['per_log_name'] ?? []);
+        $scheduleFreq = $retention['schedule'] ?? null;
+        $scheduleTime = $retention['schedule_time'] ?? '03:00';
+    @endphp
+    <section class="mb-8 bg-white border border-gray-200 rounded-lg p-5">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">
+                    {{ __('activitylog-browse::messages.retention_settings') }}
+                </h2>
+                <p class="text-xs text-gray-500 mt-1">
+                    {{ __('activitylog-browse::messages.retention_hint') }}
+                </p>
+            </div>
+            <div class="flex items-center gap-2">
+                @if($retentionEnabled)
+                    <span class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        {{ __('activitylog-browse::messages.retention_enabled') }}
+                    </span>
+                @else
+                    <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                        <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                        {{ __('activitylog-browse::messages.retention_disabled_label') }}
+                    </span>
+                @endif
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div class="rounded border border-gray-200 p-3">
+                <div class="text-xs text-gray-500 mb-1">{{ __('activitylog-browse::messages.retention_default_days') }}</div>
+                <div class="text-lg font-semibold text-gray-900">
+                    {{ (int) ($retention['default_days'] ?? 0) }}
+                    <span class="text-xs font-normal text-gray-500">{{ __('activitylog-browse::messages.days') }}</span>
+                </div>
+            </div>
+            <div class="rounded border border-gray-200 p-3">
+                <div class="text-xs text-gray-500 mb-1">{{ __('activitylog-browse::messages.retention_max_rows') }}</div>
+                <div class="text-lg font-semibold text-gray-900">
+                    {{ ($retention['max_rows'] ?? null) === null ? '—' : number_format((int) $retention['max_rows']) }}
+                </div>
+            </div>
+            <div class="rounded border border-gray-200 p-3">
+                <div class="text-xs text-gray-500 mb-1">{{ __('activitylog-browse::messages.retention_max_size') }}</div>
+                <div class="text-lg font-semibold text-gray-900">
+                    {{ ($retention['max_size_mb'] ?? null) === null ? '—' : ((int) $retention['max_size_mb']) . ' MB' }}
+                </div>
+            </div>
+            <div class="rounded border border-gray-200 p-3">
+                <div class="text-xs text-gray-500 mb-1">{{ __('activitylog-browse::messages.retention_schedule') }}</div>
+                <div class="text-lg font-semibold text-gray-900">
+                    {{ $scheduleFreq ? __('activitylog-browse::messages.retention_schedule_' . $scheduleFreq) : '—' }}
+                    @if($scheduleFreq)
+                        <span class="text-xs font-mono font-normal text-gray-500 ms-1">@ {{ $scheduleTime }}</span>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        @if(!empty($perModelRules) || !empty($perLogNameRules))
+            <div class="grid md:grid-cols-2 gap-4 mb-4">
+                @if(!empty($perModelRules))
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">
+                            {{ __('activitylog-browse::messages.retention_per_model') }}
+                        </h3>
+                        <ul class="rounded border border-gray-200 divide-y divide-gray-100">
+                            @foreach($perModelRules as $modelClass => $rule)
+                                <li class="flex items-center justify-between px-3 py-2 text-sm">
+                                    <span class="text-gray-700 truncate" title="{{ $modelClass }}">{{ class_basename($modelClass) }}</span>
+                                    @if(is_string($rule) && strtolower($rule) === 'forever')
+                                        <span class="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-xs font-medium">
+                                            {{ __('activitylog-browse::messages.retention_forever') }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-500 text-xs">{{ (int) $rule }} {{ __('activitylog-browse::messages.days') }}</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @if(!empty($perLogNameRules))
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">
+                            {{ __('activitylog-browse::messages.retention_per_log_name') }}
+                        </h3>
+                        <ul class="rounded border border-gray-200 divide-y divide-gray-100">
+                            @foreach($perLogNameRules as $logName => $rule)
+                                <li class="flex items-center justify-between px-3 py-2 text-sm">
+                                    <span class="text-gray-700">{{ $logName }}</span>
+                                    @if(is_string($rule) && strtolower($rule) === 'forever')
+                                        <span class="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-xs font-medium">
+                                            {{ __('activitylog-browse::messages.retention_forever') }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-500 text-xs">{{ (int) $rule }} {{ __('activitylog-browse::messages.days') }}</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        <form method="POST" action="{{ route('activitylog-browse.cleanup-retention') }}"
+              x-data="{ submitting: false }"
+              @submit="submitting = true">
+            @csrf
+            <button type="submit"
+                    :disabled="submitting || !{{ $retentionEnabled ? 'true' : 'false' }}"
+                    class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                <svg x-show="!submitting" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <svg x-show="submitting" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-show="!submitting">{{ __('activitylog-browse::messages.run_retention_now') }}</span>
+                <span x-show="submitting">{{ __('activitylog-browse::messages.loading') }}...</span>
+            </button>
+            @if(!$retentionEnabled)
+                <p class="mt-2 text-xs text-gray-500">{{ __('activitylog-browse::messages.retention_enable_in_config') }}</p>
+            @endif
+        </form>
+    </section>
 
     <section class="grid md:grid-cols-2 gap-4">
         <section>

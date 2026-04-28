@@ -8,11 +8,67 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Mhamed\SpatieActivitylogBrowse\Helpers\RelationDiscovery;
+use Mhamed\SpatieActivitylogBrowse\Http\Middleware\RequirePassword;
+use Mhamed\SpatieActivitylogBrowse\Support\ActivityLogHelpers;
+use Mhamed\SpatieActivitylogBrowse\Support\RetentionPruner;
 use Spatie\Activitylog\ActivitylogServiceProvider;
 use Symfony\Component\HttpFoundation\Response;
 
 class ActivityLogController extends Controller
 {
+    public function showLogin()
+    {
+        $password = config('activitylog-browse.browse.password');
+
+        if ($password === null || $password === '' || session(RequirePassword::SESSION_KEY)) {
+            return redirect()->route('activitylog-browse.index');
+        }
+
+        return view('activitylog-browse::login');
+    }
+
+    public function authenticate(Request $request)
+    {
+        $request->validate(['password' => 'required|string']);
+
+        $maxAttempts = 5;
+        $decaySeconds = 60;
+        $throttleKey = 'activitylog-browse-login|' . $request->ip();
+        $limiter = app(\Illuminate\Cache\RateLimiter::class);
+
+        if ($limiter->tooManyAttempts($throttleKey, $maxAttempts)) {
+            $seconds = $limiter->availableIn($throttleKey);
+
+            return back()->withErrors([
+                'password' => __('activitylog-browse::messages.login_too_many', ['seconds' => $seconds]),
+            ]);
+        }
+
+        $password = config('activitylog-browse.browse.password');
+
+        if ($password !== null && hash_equals((string) $password, (string) $request->input('password'))) {
+            $limiter->clear($throttleKey);
+            $request->session()->regenerate();
+            $request->session()->put(RequirePassword::SESSION_KEY, true);
+
+            return redirect()->intended(route('activitylog-browse.index'));
+        }
+
+        $limiter->hit($throttleKey, $decaySeconds);
+        $remaining = max(0, $maxAttempts - $limiter->attempts($throttleKey));
+
+        return back()->withErrors([
+            'password' => __('activitylog-browse::messages.login_invalid', ['remaining' => $remaining]),
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->session()->forget(RequirePassword::SESSION_KEY);
+
+        return redirect()->route('activitylog-browse.login');
+    }
+
     public function index(Request $request)
     {
         $this->authorize();
@@ -629,6 +685,75 @@ class ActivityLogController extends Controller
         ]);
     }
 
+    public function about()
+    {
+        $this->authorize();
+
+        $activityModel = ActivitylogServiceProvider::determineActivityModel();
+        $scoped = fn() => $activityModel::query();
+        $info = $this->getTableInfo($scoped);
+
+        $packageVersion = $this->packageVersion();
+        $spatieVersion = $this->installedVersion('spatie/laravel-activitylog');
+
+        $config = config('activitylog-browse');
+
+        $features = [
+            'auto_log'          => (bool) ($config['auto_log']['enabled'] ?? false),
+            'request_data'      => (bool) ($config['request_data']['enabled'] ?? false),
+            'device_data'       => (bool) ($config['device_data']['enabled'] ?? false),
+            'performance_data'  => (bool) ($config['performance_data']['enabled'] ?? false),
+            'app_data'          => (bool) ($config['app_data']['enabled'] ?? false),
+            'session_data'      => (bool) ($config['session_data']['enabled'] ?? false),
+            'execution_context' => (bool) ($config['execution_context']['enabled'] ?? false),
+            'browse_ui'         => (bool) ($config['browse']['enabled'] ?? false),
+            'retention'         => (bool) ($config['retention']['enabled'] ?? false),
+        ];
+
+        return view('activitylog-browse::about', [
+            'packageName'    => 'mhamed/spatie-activitylog-browse',
+            'packageVersion' => $packageVersion,
+            'spatieVersion'  => $spatieVersion,
+            'phpVersion'     => PHP_VERSION,
+            'laravelVersion' => app()->version(),
+            'environment'    => app()->environment(),
+            'connection'     => ActivityLogHelpers::activityConnection(),
+            'tableName'      => ActivityLogHelpers::tableName(),
+            'totalRows'      => $info['total_rows'],
+            'tableSize'      => $info['table_size'],
+            'oldestEntry'    => $info['oldest_entry'],
+            'newestEntry'    => $info['newest_entry'],
+            'features'       => $features,
+            'config'         => $config,
+        ]);
+    }
+
+    protected function packageVersion(): string
+    {
+        $composer = __DIR__ . '/../../../composer.json';
+        if (is_readable($composer)) {
+            $json = json_decode((string) file_get_contents($composer), true);
+            if (! empty($json['version'])) {
+                return (string) $json['version'];
+            }
+        }
+
+        return $this->installedVersion('mhamed/spatie-activitylog-browse') ?? 'dev';
+    }
+
+    protected function installedVersion(string $package): ?string
+    {
+        try {
+            if (class_exists(\Composer\InstalledVersions::class)
+                && \Composer\InstalledVersions::isInstalled($package)) {
+                return \Composer\InstalledVersions::getPrettyVersion($package);
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
     public function cleanup()
     {
         $this->authorize();
@@ -649,7 +774,35 @@ class ActivityLogController extends Controller
         $oldestEntry = $info['oldest_entry'];
         $newestEntry = $info['newest_entry'];
 
-        return view('activitylog-browse::cleanup', compact('models', 'totalRows', 'tableSize', 'oldestEntry', 'newestEntry'));
+        $retention = config('activitylog-browse.retention', []);
+
+        return view('activitylog-browse::cleanup', compact(
+            'models',
+            'totalRows',
+            'tableSize',
+            'oldestEntry',
+            'newestEntry',
+            'retention'
+        ));
+    }
+
+    public function cleanupRunRetention(RetentionPruner $pruner)
+    {
+        $this->authorize();
+
+        if (! config('activitylog-browse.retention.enabled', false)) {
+            return redirect()->route('activitylog-browse.cleanup')
+                ->with('error', __('activitylog-browse::messages.retention_disabled'));
+        }
+
+        $result = $pruner->prune();
+
+        return redirect()->route('activitylog-browse.cleanup')
+            ->with('success', __('activitylog-browse::messages.retention_success', [
+                'total'   => $result['total'],
+                'by_age'  => $result['by_age'],
+                'by_size' => $result['by_size'],
+            ]));
     }
 
     public function cleanupPreview(Request $request)
@@ -744,25 +897,7 @@ class ActivityLogController extends Controller
 
     private function clearStatsCache(): void
     {
-        $prefix = $this->cachePrefix();
-
-        $sections = ['overview', 'events', 'log_names', 'models', 'causers', 'daily', 'hourly', 'weekday', 'system_user', 'attributes', 'monthly', 'peak_day'];
-
-        foreach ($sections as $section) {
-            Cache::forget("{$prefix}:stats:{$section}");
-        }
-
-        $filterColumns = ['log_name', 'event', 'subject_type', 'causer_type'];
-        foreach ($filterColumns as $column) {
-            Cache::forget("{$prefix}:{$column}");
-        }
-
-        try {
-            $table = config('activitylog.table_name', 'activity_log');
-            $connection = $this->getActivityConnection();
-            DB::connection($connection)->statement("OPTIMIZE TABLE `{$table}`");
-        } catch (\Throwable) {
-        }
+        ActivityLogHelpers::clearStatsCache();
     }
 
     public function switchLang(string $locale)
@@ -780,18 +915,12 @@ class ActivityLogController extends Controller
 
     private function cachePrefix(): string
     {
-        if (function_exists('tenant') && tenant()) {
-            return 'activitylog-browse:t:' . tenant()->getTenantKey();
-        }
-
-        return 'activitylog-browse';
+        return ActivityLogHelpers::cachePrefix();
     }
 
     private function getActivityConnection(): string
     {
-        $model = ActivitylogServiceProvider::determineActivityModel();
-
-        return (new $model)->getConnectionName() ?? config('database.default');
+        return ActivityLogHelpers::activityConnection();
     }
 
     protected function authorize(): void

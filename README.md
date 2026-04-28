@@ -230,6 +230,77 @@ All enrichment collectors gracefully return empty arrays when running in console
 
 Set `gate` to a gate name to restrict access (e.g. `'gate' => 'view-activity-log'`).
 
+### Retention / Auto-Cleanup
+
+Automatically prune old activity log entries based on age and table size limits, with per-model overrides for sensitive data that should be kept longer (or forever).
+
+```php
+'retention' => [
+    'enabled' => true,
+
+    // Default: delete records older than 90 days
+    'default_days' => 90,
+
+    // Hard caps — when exceeded, oldest rows are deleted first.
+    // Set to null to disable.
+    'max_rows'    => 1_000_000,
+    'max_size_mb' => 500,
+
+    // Per-model overrides: int days, or 'forever' to never delete
+    'per_model' => [
+        App\Models\AuditLog::class => 'forever',
+        App\Models\User::class     => 365,
+    ],
+
+    // Per-log-name overrides
+    'per_log_name' => [
+        'security' => 365,
+    ],
+
+    'chunk_size'     => 1000,
+    'optimize_after' => true,
+
+    // 'daily' | 'weekly' | 'monthly' | null
+    'schedule' => 'daily',
+
+    // Time of day the schedule runs (24-hour HH:MM)
+    'schedule_time' => '03:00',
+],
+```
+
+**Priority hierarchy (strongest → weakest):**
+
+1. **`per_model` / `per_log_name`** — always win. `'forever'` is fully protected; an int day count protects records that are younger than the configured days from BOTH age and size pruning.
+2. **`max_rows` / `max_size_mb`** — hard size caps. They win over `default_days`: when the table is over the cap, the oldest records (that aren't protected by a per-model rule) are deleted *even if they are still inside the `default_days` window*.
+3. **`default_days`** — the catch-all rule. Applies only to records that aren't covered by a higher-priority rule.
+
+**How it works:**
+
+1. **By age** — records older than `default_days` are deleted, except for models / log names with their own override (which use their own day count or are skipped if `'forever'`).
+2. **By size** — if `max_rows` or `max_size_mb` is exceeded, the oldest records are deleted in chunks until both limits are satisfied. Records not covered by a `per_model` rule can be deleted regardless of `default_days`.
+
+**Per-model rules always win over size limits:**
+
+| Per-model rule       | Age-based prune         | Size-based prune (when `max_rows` / `max_size_mb` is hit) |
+|----------------------|-------------------------|-----------------------------------------------------------|
+| Not configured       | Deleted after `default_days` | **Can be deleted** (oldest first)                     |
+| `365` (any int days) | Deleted after 365 days  | **Protected** while younger than 365 days; older records can be deleted |
+| `'forever'`          | Never deleted           | **Never deleted** (fully protected)                       |
+
+> **TL;DR:** Per-model retention is the authoritative rule. A model set to `365` days will keep its rows for the full 365 days even if the table is over its size cap — they will only become eligible for size pruning once they exceed their own retention window. `'forever'` is fully protected. The size cap (`max_rows` / `max_size_mb`) is therefore **best-effort**: if every record is still inside its per-model retention window, nothing is deleted and the table stays over the cap until the protections expire. Set realistic per-model values to keep the size cap effective.
+
+**Triggering:**
+
+- Automatic: when `schedule` is set, the package registers a Laravel scheduled task. Make sure `schedule:work` (or a cron entry calling `schedule:run`) is running.
+- Manual CLI:
+  ```bash
+  php artisan activitylog-browse:prune              # full prune
+  php artisan activitylog-browse:prune --dry-run    # report only
+  php artisan activitylog-browse:prune --age        # age-based only
+  php artisan activitylog-browse:prune --size       # size-based only
+  ```
+- UI: a **Run Cleanup Now** button is available on the cleanup page when retention is enabled.
+
 ## Usage
 
 ### Auto-Logging
