@@ -282,6 +282,10 @@ return [
 
         // Available locales for the language switch button.
         'available_locales' => ['en', 'ar'],
+
+        // Default locale used when the user has not picked one yet.
+        // Must be one of `available_locales`.
+        'default_locale' => 'en',
     ],
 
 ];

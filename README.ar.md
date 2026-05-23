@@ -2,9 +2,9 @@
 
 # متصفّح سجل النشاطات
 
-[![أحدث إصدار على Packagist](https://img.shields.io/packagist/v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
-[![الرخصة](https://img.shields.io/packagist/l/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
-[![إصدار PHP](https://img.shields.io/packagist/php-v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
+[![أحدث إصدار على Packagist](https://img.shields.io/packagist/v/mahmoud-mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mahmoud-mhamed/spatie-activitylog-browse)
+[![الرخصة](https://img.shields.io/packagist/l/mahmoud-mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mahmoud-mhamed/spatie-activitylog-browse)
+[![إصدار PHP](https://img.shields.io/packagist/php-v/mahmoud-mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mahmoud-mhamed/spatie-activitylog-browse)
 
 باكدج Laravel بيوسّع [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog) v4 بإضافة **تسجيل تلقائي للموديلات**، **إثراء سياقي غني**، **واجهة تصفّح ويب**، **لوحة إحصائيات**، **تنظيف تلقائي** بـ retention policies، و **سجل تدقيقي للحذف** — بواجهة عربي/إنجليزي، dark mode، وإمكانية حماية بكلمة مرور.
 
@@ -69,7 +69,7 @@
 <div dir="ltr">
 
 ```bash
-composer require mhamed/spatie-activitylog-browse
+composer require mahmoud-mhamed/spatie-activitylog-browse
 ```
 
 </div>
@@ -142,7 +142,7 @@ php artisan vendor:publish --tag=activitylog-browse-migrations
 ```
 
 ```bash
-composer require mhamed/spatie-activitylog-browse:@dev
+composer require mahmoud-mhamed/spatie-activitylog-browse:@dev
 php artisan activitylog-browse:install
 ```
 

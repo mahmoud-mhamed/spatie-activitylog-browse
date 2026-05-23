@@ -59,7 +59,7 @@ class InstallCommand extends Command
 
         if ($configExists && ! $force) {
             $this->warn('  Config not overwritten. New options will fall back to package defaults.');
-            $this->line('  To merge manually, compare your config with: vendor/mhamed/spatie-activitylog-browse/config/activitylog-browse.php');
+            $this->line('  To merge manually, compare your config with: vendor/mahmoud-mhamed/spatie-activitylog-browse/config/activitylog-browse.php');
         }
 
         // Ensure storage directory + .gitignore for deletion history

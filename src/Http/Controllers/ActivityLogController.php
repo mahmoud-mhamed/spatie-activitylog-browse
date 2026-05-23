@@ -712,7 +712,7 @@ class ActivityLogController extends Controller
         ];
 
         return view('activitylog-browse::about', [
-            'packageName'    => 'mhamed/spatie-activitylog-browse',
+            'packageName'    => 'mahmoud-mhamed/spatie-activitylog-browse',
             'packageVersion' => $packageVersion,
             'spatieVersion'  => $spatieVersion,
             'phpVersion'     => PHP_VERSION,
@@ -739,7 +739,9 @@ class ActivityLogController extends Controller
             }
         }
 
-        return $this->installedVersion('mhamed/spatie-activitylog-browse') ?? 'dev';
+        return $this->installedVersion('mahmoud-mhamed/spatie-activitylog-browse')
+            ?? $this->installedVersion('mhamed/spatie-activitylog-browse')
+            ?? 'dev';
     }
 
     protected function installedVersion(string $package): ?string

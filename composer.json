@@ -1,15 +1,19 @@
 {
-    "name": "mhamed/spatie-activitylog-browse",
+    "name": "mahmoud-mhamed/spatie-activitylog-browse",
     "description": "Auto-log all models, enrich with request/device data, and browse activity logs via a web UI",
     "keywords": ["laravel", "activitylog", "audit", "browse", "log-viewer", "spatie"],
     "license": "MIT",
     "type": "library",
     "authors": [
         {
-            "name": "Mhamed",
+            "name": "Mahmoud Mhamed",
+            "email": "mahmoud1272022@gmail.com",
             "role": "Developer"
         }
     ],
+    "replace": {
+        "mhamed/spatie-activitylog-browse": "self.version"
+    },
     "require": {
         "php": "^8.1",
         "spatie/laravel-activitylog": "^4.0",

@@ -1,8 +1,8 @@
 # Activity Log Browse
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
-[![License](https://img.shields.io/packagist/l/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
-[![PHP Version](https://img.shields.io/packagist/php-v/mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mhamed/spatie-activitylog-browse)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mahmoud-mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mahmoud-mhamed/spatie-activitylog-browse)
+[![License](https://img.shields.io/packagist/l/mahmoud-mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mahmoud-mhamed/spatie-activitylog-browse)
+[![PHP Version](https://img.shields.io/packagist/php-v/mahmoud-mhamed/spatie-activitylog-browse.svg?style=flat-square)](https://packagist.org/packages/mahmoud-mhamed/spatie-activitylog-browse)
 
 A Laravel package that extends [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog) v4 with **automatic model logging**, **rich contextual enrichment**, a **web-based log browser**, a **statistics dashboard**, **automatic retention/cleanup**, and a **deletion audit trail** — all with English/Arabic UI, dark mode, and an optional password gate.
 
@@ -65,7 +65,7 @@ A Laravel package that extends [spatie/laravel-activitylog](https://github.com/s
 ## Installation
 
 ```bash
-composer require mhamed/spatie-activitylog-browse
+composer require mahmoud-mhamed/spatie-activitylog-browse
 ```
 
 If auto-discovery doesn't work, register the provider manually in `bootstrap/providers.php` (Laravel 11+) or `config/app.php`:
@@ -118,7 +118,7 @@ To install as a local path repository, add the following to your Laravel app's `
 ```
 
 ```bash
-composer require mhamed/spatie-activitylog-browse:@dev
+composer require mahmoud-mhamed/spatie-activitylog-browse:@dev
 php artisan activitylog-browse:install
 ```
 
