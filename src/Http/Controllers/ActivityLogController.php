@@ -955,6 +955,13 @@ class ActivityLogController extends Controller
         $oldestEntry = $scoped()->orderBy('created_at')->value('created_at');
         $newestEntry = $scoped()->orderByDesc('created_at')->value('created_at');
 
+        // Some projects don't cast `created_at` to a datetime on their Activity
+        // model, so it may come back as a string. Normalize to Carbon (or null)
+        // so callers can safely call ->format()/->diffForHumans() on it.
+        $toCarbon = fn ($value) => filled($value) ? \Illuminate\Support\Carbon::parse($value) : null;
+        $oldestEntry = $toCarbon($oldestEntry);
+        $newestEntry = $toCarbon($newestEntry);
+
         return [
             'total_rows' => $totalRows,
             'table_size' => $tableSize,

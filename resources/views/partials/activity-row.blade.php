@@ -1,7 +1,7 @@
 <tr class="hover:bg-gray-50">
     <td class="px-4 py-3 text-sm text-gray-500">{{ $activity->id }}</td>
     <td class="px-4 py-3 text-sm text-gray-500" title="{{ $activity->created_at }}">
-        {{ $activity->created_at->diffForHumans() }}
+        {{ \Illuminate\Support\Carbon::parse($activity->created_at)->diffForHumans() }}
     </td>
     <td class="px-4 py-3 text-sm">
         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">

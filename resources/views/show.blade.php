@@ -35,7 +35,8 @@
                 </div>
                 <div>
                     <dt class="text-sm font-medium text-gray-500">{{ __('activitylog-browse::messages.date') }}</dt>
-                    <dd class="mt-1 text-sm text-gray-900">{{ $activity->created_at->format('Y-m-d H:i:s') }} ({{ $activity->created_at->diffForHumans() }})</dd>
+                    @php($createdAt = \Illuminate\Support\Carbon::parse($activity->created_at))
+                    <dd class="mt-1 text-sm text-gray-900">{{ $createdAt->format('Y-m-d H:i:s') }} ({{ $createdAt->diffForHumans() }})</dd>
                 </div>
                 <div>
                     <dt class="text-sm font-medium text-gray-500">{{ __('activitylog-browse::messages.log_name') }}</dt>
