@@ -19,6 +19,14 @@
                 </svg>
                 {{ __('activitylog-browse::messages.all_model_logs', ['model' => class_basename($activity->subject_type) . ' #' . $activity->subject_id]) }}
             </a>
+            <span class="text-gray-300">|</span>
+            <a href="{{ route('activitylog-browse.timeline', ['subject_type' => $activity->subject_type, 'subject_id' => $activity->subject_id]) }}"
+               class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h6" />
+                </svg>
+                {{ __('activitylog-browse::messages.timeline') }}
+            </a>
         @endif
     </div>
 
@@ -35,7 +43,7 @@
                 </div>
                 <div>
                     <dt class="text-sm font-medium text-gray-500">{{ __('activitylog-browse::messages.date') }}</dt>
-                    @php($createdAt = \Illuminate\Support\Carbon::parse($activity->created_at))
+                    @php $createdAt = \Illuminate\Support\Carbon::parse($activity->created_at); @endphp
                     <dd class="mt-1 text-sm text-gray-900">{{ $createdAt->format('Y-m-d H:i:s') }} ({{ $createdAt->diffForHumans() }})</dd>
                 </div>
                 <div>
@@ -84,80 +92,33 @@
                         <dd class="mt-1 text-sm text-gray-900 font-mono">{{ $activity->batch_uuid }}</dd>
                     </div>
                 @endif
+                @if($requestId)
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">{{ __('activitylog-browse::messages.request_id') }}</dt>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            <span dir="ltr" class="font-mono select-all">{{ $requestId }}</span>
+                            <a href="{{ route('activitylog-browse.index', ['request_id' => $requestId]) }}" class="ms-2 text-blue-600 hover:text-blue-800">{{ __('activitylog-browse::messages.request_changes') }}</a>
+                        </dd>
+                    </div>
+                @endif
             </dl>
         </div>
     </div>
 
-    {{-- Changes Diff --}}
+    {{-- Changes Diff (rows from ValuePresenter: labels, enum labels, highlighted long-text / JSON changes) --}}
     @php
         $properties = $activity->properties?->toArray() ?? [];
-        $old = $properties['old'] ?? null;
-        $attributes = $properties['attributes'] ?? null;
+        $hasOld = ! empty($properties['old']);
+        $hasNew = ! empty($properties['attributes']);
     @endphp
 
-    @if($old || $attributes)
+    @if($changeRows)
         <div class="bg-white rounded-lg shadow mb-6">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-900">{{ __('activitylog-browse::messages.changes') }}</h2>
             </div>
             <div class="px-6 py-4 overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.attribute') }}</th>
-                            @if($old)
-                                <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.old') }}</th>
-                            @endif
-                            @if($attributes)
-                                <th class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase">{{ __('activitylog-browse::messages.new') }}</th>
-                            @endif
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        @php
-                            $allKeys = array_unique(array_merge(
-                                array_keys($old ?? []),
-                                array_keys($attributes ?? []),
-                            ));
-                            sort($allKeys);
-                        @endphp
-                        @foreach($allKeys as $key)
-                            <tr>
-                                <td class="px-4 py-2 text-sm font-medium text-gray-700" title="{{ $key }}">@include('activitylog-browse::partials.translated-key', ['key' => $key])</td>
-                                @if($old)
-                                    <td class="px-4 py-2 text-sm text-red-700 bg-red-50">
-                                        @if(isset($old[$key]))
-                                            @if(is_array($old[$key]))
-                                                <pre class="text-xs">{{ json_encode($old[$key], JSON_PRETTY_PRINT) }}</pre>
-                                            @elseif(is_null($old[$key]))
-                                                <span class="italic text-gray-400">{{ __('activitylog-browse::messages.null') }}</span>
-                                            @else
-                                                {{ $old[$key] }}
-                                            @endif
-                                        @else
-                                            <span class="italic text-gray-400">-</span>
-                                        @endif
-                                    </td>
-                                @endif
-                                @if($attributes)
-                                    <td class="px-4 py-2 text-sm text-green-700 bg-green-50">
-                                        @if(isset($attributes[$key]))
-                                            @if(is_array($attributes[$key]))
-                                                <pre class="text-xs">{{ json_encode($attributes[$key], JSON_PRETTY_PRINT) }}</pre>
-                                            @elseif(is_null($attributes[$key]))
-                                                <span class="italic text-gray-400">{{ __('activitylog-browse::messages.null') }}</span>
-                                            @else
-                                                {{ $attributes[$key] }}
-                                            @endif
-                                        @else
-                                            <span class="italic text-gray-400">-</span>
-                                        @endif
-                                    </td>
-                                @endif
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                @include('activitylog-browse::partials.change-rows', ['rows' => $changeRows, 'hasOld' => $hasOld, 'hasNew' => $hasNew])
             </div>
         </div>
     @endif
@@ -172,6 +133,20 @@
             <div class="px-6 py-4">
                 @include('activitylog-browse::partials.properties-display', ['properties' => $requestData])
             </div>
+            @if($siblingBody)
+                {{-- The body is stored once per request, on its first activity --}}
+                <div class="px-6 pb-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">
+                        {{ __('activitylog-browse::messages.request_body') }}
+                        <a href="{{ route('activitylog-browse.show', $siblingBody['id']) }}" class="ms-2 text-xs font-normal text-blue-600 hover:text-blue-800">{{ __('activitylog-browse::messages.body_from_activity', ['id' => $siblingBody['id']]) }}</a>
+                    </h3>
+                    @if(is_array($siblingBody['body']))
+                        @include('activitylog-browse::partials.properties-display', ['properties' => $siblingBody['body']])
+                    @else
+                        <pre dir="ltr" class="text-left text-xs bg-gray-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">{{ $siblingBody['body'] }}</pre>
+                    @endif
+                </div>
+            @endif
         </div>
     @endif
 

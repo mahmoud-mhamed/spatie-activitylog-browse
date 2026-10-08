@@ -4,9 +4,18 @@ namespace Mhamed\SpatieActivitylogBrowse\Helpers;
 
 class ExecutionContextCollector
 {
-    private static ?string $cachedSource = null;
-    private static ?string $cachedJobName = null;
-    private static bool $jobNameDetected = false;
+    /**
+     * Class names of the queue jobs running in this process, keyed by job object id
+     * (a stack: a job can run another one synchronously). Fed by the queue events,
+     * so a long-lived worker reports the job that is actually running.
+     *
+     * @var array<int, string>
+     */
+    private static array $jobNames = [];
+
+    /** Scheduled tasks running inside this process (closures / jobs run by schedule:run). */
+    private static int $scheduledTasks = 0;
+
     private static ?string $cachedCommandName = null;
     private static bool $commandNameDetected = false;
 
@@ -43,62 +52,60 @@ class ExecutionContextCollector
         return $data ? ['execution_context' => $data] : [];
     }
 
+    public static function beginJob(object $job, string $name): void
+    {
+        self::$jobNames[spl_object_id($job)] = $name;
+    }
+
+    /** Safe to call more than once per job (a failing job fires several events). */
+    public static function endJob(object $job): void
+    {
+        unset(self::$jobNames[spl_object_id($job)]);
+    }
+
+    public static function beginScheduledTask(): void
+    {
+        self::$scheduledTasks++;
+    }
+
+    public static function endScheduledTask(): void
+    {
+        self::$scheduledTasks = max(0, self::$scheduledTasks - 1);
+    }
+
     public static function resetCache(): void
     {
-        self::$cachedSource = null;
-        self::$cachedJobName = null;
-        self::$jobNameDetected = false;
+        self::$jobNames = [];
+        self::$scheduledTasks = 0;
         self::$cachedCommandName = null;
         self::$commandNameDetected = false;
     }
 
+    /**
+     * Worked out per activity: one process (a queue worker, schedule:run) runs many
+     * different things. "schedule" only for work done by the scheduler process itself;
+     * a command the scheduler spawns runs in its own process and reports "console".
+     */
     protected static function source(): string
     {
-        if (self::$cachedSource !== null) {
-            return self::$cachedSource;
+        if (RuntimeContext::isHttpRequest()) {
+            return 'web';
         }
 
-        if (! app()->runningInConsole()) {
-            return self::$cachedSource = 'web';
+        if (self::$jobNames) {
+            return 'queue';
         }
 
-        if (self::jobName()) {
-            return self::$cachedSource = 'queue';
+        if (self::$scheduledTasks > 0 || in_array(self::commandName(), ['schedule:run', 'schedule:work', 'schedule:test'], true)) {
+            return 'schedule';
         }
 
-        if (class_exists(\Illuminate\Console\Scheduling\Schedule::class)
-            && app()->bound(\Illuminate\Console\Scheduling\Schedule::class)) {
-            return self::$cachedSource = 'schedule';
-        }
-
-        return self::$cachedSource = 'console';
+        return 'console';
     }
 
     protected static function jobName(): ?string
     {
-        if (self::$jobNameDetected) {
-            return self::$cachedJobName;
-        }
-
-        self::$jobNameDetected = true;
-
-        if (! app()->runningInConsole()) {
-            return self::$cachedJobName = null;
-        }
-
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 30);
-
-        foreach ($trace as $frame) {
-            if (isset($frame['class']) && is_a($frame['class'], \Illuminate\Contracts\Queue\Job::class, true) && ($frame['function'] ?? '') === 'fire') {
-                return self::$cachedJobName = $frame['class'];
-            }
-
-            if (isset($frame['class']) && is_a($frame['class'], \Illuminate\Contracts\Queue\ShouldQueue::class, true) && ($frame['function'] ?? '') === 'handle') {
-                return self::$cachedJobName = $frame['class'];
-            }
-        }
-
-        return self::$cachedJobName = null;
+        return self::$jobNames ? end(self::$jobNames) : null;
     }
 
     protected static function commandName(): ?string

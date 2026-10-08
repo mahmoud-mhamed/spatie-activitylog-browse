@@ -77,6 +77,34 @@ return [
             'previous_url' => true,
             'method' => true,
             'route_name' => true,
+            // Groups every activity of one HTTP request (needs the request_id migration).
+            'request_id' => true,
+            // Request payload (form / JSON input). Off by default: it grows the table.
+            // Stored once per request (on its first activity) when request_id is available,
+            // otherwise on every activity row of the request.
+            'body' => false,
+        ],
+
+        // Only used when fields.body is enabled.
+        'body' => [
+            // Keys whose values are replaced with "********" (case-insensitive, `*` wildcards).
+            // Setting this replaces the whole default list.
+            'masked_keys' => [
+                '*password*', '*passwd*', 'pwd', '*token*', '*secret*',
+                '*api_key*', '*apikey*', '*private_key*', 'authorization',
+                'otp', 'otp_*', '*_otp', 'pin', 'pin_code', '*_pin', 'verification_code',
+                'cvv', 'cvc', 'card_number', 'credit_card',
+            ],
+            // String values longer than this are clipped (0 = no limit).
+            'max_value_length' => 1000,
+            // When the encoded body exceeds this many bytes it is stored as a clipped JSON string (0 = no limit).
+            'max_length' => 10000,
+            // Strip bodies older than `days` (the activity rows are kept), nightly at 03:30
+            // or via `php artisan activitylog-browse:prune --bodies`.
+            'retention' => [
+                'enabled' => false,
+                'days' => 30,
+            ],
         ],
     ],
 
@@ -279,6 +307,12 @@ return [
         // password (in addition to the configured middleware) before browsing.
         // Set to null/empty to disable.
         'password' => env('ACTIVITYLOG_BROWSE_PASSWORD'),
+        // "Restore to this version" on the timeline. It writes to your models (observers run,
+        // the restore itself is logged), so it is opt-in. Optional gate name to limit who can use it.
+        'restore' => [
+            'enabled' => false,
+            'gate' => null,
+        ],
 
         // Available locales for the language switch button.
         'available_locales' => ['en', 'ar'],

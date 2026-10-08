@@ -15,6 +15,7 @@ class RuntimeContext
 {
     private static ?bool $isWebContext = null;
     private static ?bool $isConsole = null;
+    private static ?bool $isOctane = null;
     private static ?string $hostname = null;
 
     /**
@@ -39,6 +40,23 @@ class RuntimeContext
         return self::$isConsole ??= app()->runningInConsole();
     }
 
+    /**
+     * True only for a real HTTP request (php-fpm, `artisan serve`, or an Octane worker).
+     * Unlike isWebContext(), this is false for queue jobs, scheduled tasks and artisan
+     * commands: Laravel gives them a placeholder Request built from APP_URL (GET,
+     * 127.0.0.1, "Symfony" user agent), so request/device data recorded there is fake.
+     */
+    public static function isHttpRequest(): bool
+    {
+        return ! self::isConsole() || self::isOctane();
+    }
+
+    /** Octane workers run in a CLI process but serve real HTTP requests. */
+    private static function isOctane(): bool
+    {
+        return self::$isOctane ??= (bool) (getenv('LARAVEL_OCTANE') ?: ($_SERVER['LARAVEL_OCTANE'] ?? false));
+    }
+
     public static function hostname(): string
     {
         return self::$hostname ??= (gethostname() ?: 'unknown');
@@ -49,6 +67,7 @@ class RuntimeContext
     {
         self::$isWebContext = null;
         self::$isConsole = null;
+        self::$isOctane = null;
         self::$hostname = null;
     }
 }

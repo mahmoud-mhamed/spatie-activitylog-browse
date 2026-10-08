@@ -361,6 +361,176 @@ class RetentionPruner
         return $deleted;
     }
 
+    /**
+     * Strip `request_data.body` from activities older than
+     * `request_data.body.retention.days`, keeping the rows themselves: the body is
+     * by far the largest part of an enriched row. Returns how many rows were (or,
+     * for a dry run, would be) stripped. Disabled unless the retention is enabled.
+     */
+    public function pruneRequestBodies(bool $dryRun = false): int
+    {
+        $config = config('activitylog-browse.request_data.body.retention');
+        $days = (int) (is_array($config) ? ($config['days'] ?? 0) : 0);
+
+        if (! is_array($config) || ! ($config['enabled'] ?? false) || $days <= 0) {
+            return 0;
+        }
+
+        if ($dryRun) {
+            return $this->stripRequestBodies($days, PHP_INT_MAX, true);
+        }
+
+        $stripped = 0;
+        do {
+            set_time_limit(30);
+            $batch = $this->stripRequestBodies($days, $this->chunkSize);
+            $stripped += $batch;
+        } while ($batch === $this->chunkSize);
+
+        if ($stripped > 0) {
+            ActivityLogHelpers::markOptimizePending();
+        }
+
+        return $stripped;
+    }
+
+    /**
+     * Strip `request_data.body` from at most $limit rows older than $days (0 = all).
+     * Stripped rows stop matching, so callers repeat until it returns less than $limit.
+     */
+    public function stripRequestBodies(int $days, int $limit, bool $dryRun = false): int
+    {
+        return $this->stripProperties(
+            fn (Builder $query) => $days > 0 ? $query->where('created_at', '<', now()->subDays($days)) : $query,
+            ['$.request_data.body'],
+            ['$.request_data.body'],
+            $limit,
+            $dryRun
+        );
+    }
+
+    /** Total size in bytes of the stored bodies older than $days (0 = all); null if the driver can't tell. */
+    public function requestBodyBytes(int $days): ?int
+    {
+        $query = $this->newQuery();
+        $driver = $query->getConnection()->getDriverName();
+        $body = match ($driver) {
+            'mysql', 'mariadb' => "JSON_EXTRACT(properties, '$.request_data.body')",
+            'sqlite' => "json_extract(properties, '$.request_data.body')",
+            'pgsql' => "(properties::jsonb #> '{request_data,body}')::text",
+            default => null,
+        };
+
+        if (! $body) {
+            return null;
+        }
+
+        if ($days > 0) {
+            $query->where('created_at', '<', now()->subDays($days));
+        }
+
+        return (int) $query->toBase()->sum($query->getConnection()->raw("LENGTH({$body})"));
+    }
+
+    /**
+     * Remove the placeholder request/device data that queue jobs, scheduled tasks and
+     * commands recorded before request/device enrichment became HTTP-only (APP_URL, GET,
+     * 127.0.0.1, "Symfony"); queue rows also lose their worker-wide performance numbers.
+     * Marker: request_data/device_data on a non-web row, so rows logged after the fix
+     * (which carry correct per-job performance) are never touched. At most $limit rows.
+     */
+    public function stripPlaceholderData(int $limit, bool $dryRun = false): int
+    {
+        $markers = ['$.request_data', '$.device_data'];
+        $source = fn (string $driver, string $condition) => fn (Builder $query) => $query->whereRaw($this->jsonText($driver, '$.execution_context.source') . $condition);
+        $driver = $this->newQuery()->getConnection()->getDriverName();
+
+        $queue = fn (int $max, bool $dry) => $this->stripProperties($source($driver, " = 'queue'"), $markers, [...$markers, '$.performance_data'], $max, $dry);
+        $commands = fn (int $max, bool $dry) => $this->stripProperties($source($driver, " IN ('schedule', 'console')"), $markers, $markers, $max, $dry);
+
+        if ($dryRun) {
+            return $queue(PHP_INT_MAX, true) + $commands(PHP_INT_MAX, true);
+        }
+
+        $stripped = $queue($limit, false);
+
+        return $stripped < $limit ? $stripped + $commands($limit - $stripped, false) : $stripped;
+    }
+
+    /**
+     * Remove JSON paths from `properties` (rows kept, model events bypassed) on at most
+     * $limit rows matching $scope that contain any of $markerPaths. A dry run counts all
+     * matching rows. Paths are fixed internal literals, never user input.
+     */
+    protected function stripProperties(callable $scope, array $markerPaths, array $removePaths, int $limit, bool $dryRun): int
+    {
+        $query = $this->newQuery();
+        $connection = $query->getConnection();
+        $driver = $connection->getDriverName();
+
+        if (! in_array($driver, ['mysql', 'mariadb', 'sqlite', 'pgsql'], true)) {
+            return 0;
+        }
+
+        $scope($query);
+        $query->where(function (Builder $q) use ($driver, $markerPaths) {
+            foreach ($markerPaths as $path) {
+                $q->orWhereRaw($this->jsonHas($driver, $path));
+            }
+        });
+
+        if ($dryRun) {
+            return $query->count();
+        }
+
+        $ids = $query->orderBy('id')->limit($limit)->pluck('id');
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        return $this->newQuery()->whereIn('id', $ids)->toBase()
+            ->update(['properties' => $connection->raw($this->jsonRemove($driver, $removePaths))]);
+    }
+
+    protected function jsonHas(string $driver, string $path): string
+    {
+        return match ($driver) {
+            'mysql', 'mariadb' => "JSON_CONTAINS_PATH(properties, 'one', '{$path}')",
+            'sqlite' => "json_extract(properties, '{$path}') IS NOT NULL",
+            'pgsql' => '(properties::jsonb #> ' . $this->pgPath($path) . ') IS NOT NULL',
+        };
+    }
+
+    protected function jsonText(string $driver, string $path): string
+    {
+        return match ($driver) {
+            'mysql', 'mariadb' => "JSON_UNQUOTE(JSON_EXTRACT(properties, '{$path}'))",
+            'sqlite' => "json_extract(properties, '{$path}')",
+            'pgsql' => '(properties::jsonb #>> ' . $this->pgPath($path) . ')',
+            default => 'NULL',
+        };
+    }
+
+    protected function jsonRemove(string $driver, array $paths): string
+    {
+        $quoted = implode(', ', array_map(fn ($path) => "'{$path}'", $paths));
+
+        return match ($driver) {
+            // A bare `col = JSON_REMOVE(col, ...)` is a MySQL partial in-place update: the
+            // document keeps its old size (JSON_STORAGE_FREE) and no rebuild reclaims it.
+            // Wrapping it makes MySQL write a freshly serialized, compact document.
+            'mysql', 'mariadb' => "JSON_MERGE_PATCH(JSON_REMOVE(properties, {$quoted}), '{}')",
+            'sqlite' => "json_remove(properties, {$quoted})",
+            'pgsql' => '(properties::jsonb ' . implode(' ', array_map(fn ($path) => '#- ' . $this->pgPath($path), $paths)) . ')::json',
+        };
+    }
+
+    /** '$.request_data.body' → '{request_data,body}' */
+    protected function pgPath(string $path): string
+    {
+        return "'{" . str_replace('.', ',', substr($path, 2)) . "}'";
+    }
+
     protected function newQuery(): Builder
     {
         $model = ActivitylogServiceProvider::determineActivityModel();

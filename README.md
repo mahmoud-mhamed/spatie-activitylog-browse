@@ -15,6 +15,8 @@ A Laravel package that extends [spatie/laravel-activitylog](https://github.com/s
 - 📦 **Rich enrichment** — request, device, performance, app, session, and execution context attached to every log entry
 - 🆔 **UUID-friendly** — morph ID columns automatically migrated to support UUIDs
 - ⚡ **Performance-optimized** — per-class caching, request-scoped collectors, no per-event reflection
+- 🧾 **Request body capture** (opt-in) — sensitive keys masked, uploads reduced to metadata, size limits, stored once per request, optional body-only retention
+- 🔗 **Request grouping** — a `request_id` links every activity of an HTTP request *and* of the queued jobs it dispatched (automatic, no app changes)
 
 ### Browsing & Analytics
 - 🌐 **Browse UI** — filter, search, popovers, color-coded diffs, related-model navigation
@@ -22,6 +24,9 @@ A Laravel package that extends [spatie/laravel-activitylog](https://github.com/s
 - 🌍 **Localized** — English & Arabic with automatic RTL layout
 - 🌙 **Dark mode** — system-aware with manual toggle, persisted in localStorage
 - 📝 **Attribute translation** — uses Laravel's `validation.attributes`
+- 🏷 **Value labels** — enum labels from your own translations / enum methods, yes-no, formatted amounts; long-text and JSON diffs highlight only what changed
+- 🕑 **Record timeline** — every change of one record in order, with opt-in "restore this version" (preview + confirmation, optional gate)
+- 🔎 **Request filters & click-to-filter** — body, method, source, route, URL, IP, quick date ranges; click any value in the table to filter by it
 
 ### Cleanup & Audit
 - 🧹 **Manual cleanup page** — preview-then-delete with model and date filters
@@ -169,6 +174,13 @@ Each enrichment section can be enabled/disabled and has per-field toggles. Disab
     'fields' => [
         'url' => true, 'previous_url' => true,
         'method' => true, 'route_name' => true,
+        'request_id' => true, // groups all activities of one HTTP request (migration never fails a deploy; retried nightly, or `php artisan activitylog-browse:ensure-columns`)
+        'body' => false, // request payload, opt-in (stored once per request when request_id is available)
+    ],
+    'body' => [
+        'masked_keys' => ['*password*', '*token*', '*secret*', '*api_key*', 'pin_code', /* ... */], // values replaced with ********
+        'max_value_length' => 1000, // clip long string values
+        'max_length' => 10000,      // larger bodies are stored as a clipped JSON string
     ],
 ],
 

@@ -9,24 +9,35 @@ use Mhamed\SpatieActivitylogBrowse\Helpers\ExecutionContextCollector;
 use Mhamed\SpatieActivitylogBrowse\Helpers\PerformanceDataCollector;
 use Mhamed\SpatieActivitylogBrowse\Helpers\RequestDataCollector;
 use Mhamed\SpatieActivitylogBrowse\Helpers\SessionDataCollector;
+use Mhamed\SpatieActivitylogBrowse\Support\ActivityLogHelpers;
 
 class ActivityEnrichmentObserver
 {
     /** @var array<int, callable():array>|null */
     private static ?array $collectors = null;
 
+    /**
+     * Enrichment is best-effort: this runs on every activity insert, i.e. inside the
+     * host app's model saves. Any failure here is reported and skipped, never thrown.
+     */
     public function creating(Activity $activity): void
     {
-        $collectors = self::collectors();
-        if (empty($collectors)) {
-            return;
+        try {
+            $requestId = self::assignRequestId($activity);
+        } catch (\Throwable $e) {
+            report($e);
+            $requestId = null;
         }
 
         $enrichment = [];
-        foreach ($collectors as $collector) {
-            $result = $collector();
-            if (! empty($result)) {
-                $enrichment += $result;
+        foreach (self::collectors() as $collector) {
+            try {
+                $result = $collector();
+                if (! empty($result)) {
+                    $enrichment += $result;
+                }
+            } catch (\Throwable $e) {
+                report($e);
             }
         }
 
@@ -34,9 +45,47 @@ class ActivityEnrichmentObserver
             return;
         }
 
-        $properties = $activity->properties?->toArray() ?? [];
+        try {
+            // Every activity of a request carries the same body. Once request_id links
+            // them, keep it on the first one that is actually saved (claimed in created());
+            // the UI looks it up from there. A transaction rollback releases the claim.
+            if ($requestId !== null && isset($enrichment['request_data']['body']) && RequestDataCollector::isBodyClaimed()) {
+                unset($enrichment['request_data']['body']);
+            }
 
-        $activity->properties = collect(array_merge($properties, $enrichment));
+            $properties = $activity->properties?->toArray() ?? [];
+            $activity->properties = collect(array_merge($properties, $enrichment));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /** The body is claimed only once its activity is saved, so a cancelled insert doesn't lose it. */
+    public function created(Activity $activity): void
+    {
+        try {
+            if (($activity->getAttributes()['request_id'] ?? null) !== null && isset($activity->properties['request_data']['body'])) {
+                RequestDataCollector::claimBody();
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
+     * Stamp the request/job group id. requestId() is checked first: it is null
+     * outside HTTP requests and jobs, which spares the scheduler the column lookup.
+     */
+    private static function assignRequestId(Activity $activity): ?string
+    {
+        $requestId = RequestDataCollector::requestId();
+        if ($requestId === null || ! ActivityLogHelpers::hasRequestIdColumn()) {
+            return null;
+        }
+
+        $activity->request_id ??= $requestId;
+
+        return $requestId;
     }
 
     /**

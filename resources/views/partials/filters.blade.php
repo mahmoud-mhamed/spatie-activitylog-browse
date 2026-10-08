@@ -1,16 +1,71 @@
-<form id="activitylog-browse-filters" method="GET" action="{{ route('activitylog-browse.index') }}" class="bg-white rounded-lg shadow p-4 mb-6">
+@php
+    $requestFilterKeys = ['body_search', 'method', 'source', 'route_name', 'url', 'ip'];
+    $activeRequestFilters = count(array_filter($requestFilterKeys, fn ($key) => request()->filled($key)));
+    $showRequestFilterGroup = config('activitylog-browse.request_data.enabled') || $activeRequestFilters > 0;
+@endphp
+<form id="activitylog-browse-filters" method="GET" action="{{ route('activitylog-browse.index') }}" class="bg-white rounded-lg shadow p-4 mb-6"
+      x-data="{ showRequestFilters: @js($activeRequestFilters > 0) }">
     @if(request('via_activity'))
         <input type="hidden" name="via_activity" value="{{ request('via_activity') }}">
     @endif
     @if(request('via_relation'))
         <input type="hidden" name="via_relation" value="{{ request('via_relation') }}">
     @endif
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    @if(request('request_id'))
+        <input type="hidden" name="request_id" value="{{ request('request_id') }}">
+    @endif
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div>
             <label for="search" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.search') }}</label>
             <input type="text" name="search" id="search" value="{{ request('search') }}"
                    placeholder="{{ __('activitylog-browse::messages.search_placeholder') }}"
                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
+        </div>
+
+        {{-- From – To on one line; quick relative ranges (?range=1h) sit on the label line --}}
+        <div class="sm:col-span-2" x-data="{ rangeOpen: false }">
+            @php
+                $dateRanges = \Mhamed\SpatieActivitylogBrowse\Http\Controllers\ActivityLogController::DATE_RANGES;
+                $activeRange = in_array(request('range'), $dateRanges, true) ? request('range') : null;
+                // Date-only inputs would drop a time (from a quick range or a clicked timestamp) on the next submit,
+                // so both switch to date + time when either value carries one.
+                $dateInputType = str_contains((string) request('date_from'), ':') || str_contains((string) request('date_to'), ':')
+                    ? 'datetime-local'
+                    : 'date';
+            @endphp
+            <div class="flex items-center justify-between gap-2 mb-1">
+                <label for="date_from" class="block text-sm font-medium text-gray-700">{{ __('activitylog-browse::messages.from') }} – {{ __('activitylog-browse::messages.to') }}</label>
+                <div class="relative" @click.outside="rangeOpen = false" @keydown.escape.window="rangeOpen = false">
+                    <button type="button" @click="rangeOpen = !rangeOpen" :aria-expanded="rangeOpen"
+                            title="{{ __('activitylog-browse::messages.quick_range') }}"
+                            class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded {{ $activeRange ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="whitespace-nowrap">{{ $activeRange ? __("activitylog-browse::messages.range_{$activeRange}") : __('activitylog-browse::messages.quick_range') }}</span>
+                    </button>
+                    <div x-show="rangeOpen" x-transition.opacity.duration.150ms style="display:none"
+                         class="absolute end-0 z-50 mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg py-1">
+                        @foreach($dateRanges as $range)
+                            <a href="{{ request()->fullUrlWithQuery(['range' => $range, 'date_from' => null, 'date_to' => null, 'page' => null]) }}"
+                               class="block px-3 py-1.5 text-sm hover:bg-blue-50 {{ $activeRange === $range ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700' }}">
+                                {{ __("activitylog-browse::messages.range_{$range}") }}
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+            {{-- Editing a date by hand drops the quick range, which would otherwise override it --}}
+            <input type="hidden" name="range" x-ref="range" value="{{ $activeRange }}">
+            <div class="flex items-center gap-2">
+                <input type="{{ $dateInputType }}" step="1" name="date_from" id="date_from" value="{{ request('date_from') }}"
+                       aria-label="{{ __('activitylog-browse::messages.from') }}" @input="$refs.range.value = ''"
+                       class="flex-1 min-w-0 rounded-md border-gray-300 shadow-sm text-sm px-2 py-2 border focus:border-blue-500 focus:ring-blue-500">
+                <span class="text-gray-400">–</span>
+                <input type="{{ $dateInputType }}" step="1" name="date_to" id="date_to" value="{{ request('date_to') }}"
+                       aria-label="{{ __('activitylog-browse::messages.to') }}" @input="$refs.range.value = ''"
+                       class="flex-1 min-w-0 rounded-md border-gray-300 shadow-sm text-sm px-2 py-2 border focus:border-blue-500 focus:ring-blue-500">
+            </div>
         </div>
 
         @include('activitylog-browse::partials.searchable-select', [
@@ -256,19 +311,59 @@
                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
         </div>
 
+
+        {{-- Request filters (read the enrichment data stored on each activity); collapsed unless one is active --}}
+        @if($showRequestFilterGroup)
+        <div x-show="showRequestFilters" class="contents" @if($activeRequestFilters === 0) style="display:none" @endif>
+        @if(config('activitylog-browse.request_data.fields.body') || request()->filled('body_search'))
+            <div>
+                <label for="body_search" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.body_search') }}</label>
+                <input type="text" name="body_search" id="body_search" value="{{ request('body_search') }}"
+                       placeholder="{{ __('activitylog-browse::messages.body_search_placeholder') }}"
+                       class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
+            </div>
+        @endif
+
+        @include('activitylog-browse::partials.searchable-select', [
+            'name' => 'method',
+            'label' => __('activitylog-browse::messages.request_method'),
+            'allLabel' => __('activitylog-browse::messages.all'),
+            'selected' => request('method', ''),
+            'options' => array_map(fn ($m) => ['value' => $m, 'label' => $m], ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+        ])
+
+        @include('activitylog-browse::partials.searchable-select', [
+            'name' => 'source',
+            'label' => __('activitylog-browse::messages.source'),
+            'allLabel' => __('activitylog-browse::messages.all'),
+            'selected' => request('source', ''),
+            'options' => array_map(fn ($src) => ['value' => $src, 'label' => __("activitylog-browse::messages.source_{$src}")], ['web', 'queue', 'schedule', 'console']),
+        ])
+
         <div>
-            <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.from') }}</label>
-            <input type="date" name="date_from" id="date_from" value="{{ request('date_from') }}"
+            <label for="route_name" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.request_route_name') }}</label>
+            <input type="text" name="route_name" id="route_name" value="{{ request('route_name') }}" dir="ltr"
+                   placeholder="sales.store"
                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
         </div>
 
         <div>
-            <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.to') }}</label>
-            <input type="date" name="date_to" id="date_to" value="{{ request('date_to') }}"
+            <label for="url" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.request_url') }}</label>
+            <input type="text" name="url" id="url" value="{{ request('url') }}" dir="ltr"
+                   placeholder="/clients"
                    class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
         </div>
 
-        <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
+        <div>
+            <label for="ip" class="block text-sm font-medium text-gray-700 mb-1">{{ __('activitylog-browse::messages.ip_address') }}</label>
+            <input type="text" name="ip" id="ip" value="{{ request('ip') }}" dir="ltr"
+                   placeholder="192.168."
+                   class="w-full rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500">
+        </div>
+        </div>
+        @endif
+
+        <div class="col-span-full flex flex-wrap items-center gap-2">
             <button type="submit"
                     class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                 {{ __('activitylog-browse::messages.filter') }}
@@ -282,6 +377,21 @@
                class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-300">
                 {{ __('activitylog-browse::messages.reset') }}
             </a>
+            @if($showRequestFilterGroup)
+                <button type="button" @click="showRequestFilters = !showRequestFilters" :aria-expanded="showRequestFilters"
+                        class="ms-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                    {{ __('activitylog-browse::messages.request_filters') }}
+                    @if($activeRequestFilters)
+                        <span class="inline-flex items-center justify-center min-w-[1.25rem] px-1 rounded-full bg-blue-600 text-white text-xs tabular-nums">{{ $activeRequestFilters }}</span>
+                    @endif
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 transition-transform" :class="showRequestFilters ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            @endif
         </div>
     </div>
 </form>
@@ -358,7 +468,7 @@
             .then(function(r) { return r.json(); })
             .then(function(attrs) {
                 var d = Alpine.$data(wrapper);
-                d.options = attrs.map(function(a) { return { value: a, label: translateAttribute(a) }; });
+                d.options = attrs; // [{value, label}], labelled server-side
             });
     }
 

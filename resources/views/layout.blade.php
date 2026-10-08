@@ -16,14 +16,22 @@
         tailwind.config = { darkMode: 'class' };
     </script>
     @include('activitylog-browse::partials.dark-mode-styles')
+    <style>
+        /* Tooltip for clickable values: <a data-tip="What clicking does">. Matches the icon tooltips. */
+        [data-tip] { position: relative; }
+        [data-tip]:hover::after, [data-tip]:focus-visible::after {
+            content: attr(data-tip);
+            position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+            padding: 4px 8px; border-radius: 4px; background: #1f2937; color: #fff;
+            font-size: 12px; font-weight: 400; line-height: 1rem; white-space: nowrap;
+            text-decoration: none; pointer-events: none; z-index: 60;
+        }
+        /* Near the table edges: anchor to the element's start/end so the overflow wrapper doesn't clip it. */
+        [data-tip][data-tip-align="start"]::after { left: auto; transform: none; inset-inline-start: 0; }
+        [data-tip][data-tip-align="end"]::after { left: auto; transform: none; inset-inline-end: 0; }
+    </style>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
     <script>
-        var __attrTranslations = @json(is_array(__('validation.attributes')) ? __('validation.attributes') : []);
-        function translateAttribute(key) {
-            if (__attrTranslations[key]) return __attrTranslations[key] + ' (' + key + ')';
-            var headline = key.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
-            return headline !== key ? headline + ' (' + key + ')' : key;
-        }
         window.__toggleTheme = function () {
             var html = document.documentElement;
             var isDark = html.classList.toggle('dark');
